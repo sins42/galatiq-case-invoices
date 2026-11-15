@@ -8,7 +8,7 @@ The guiding rule is: never pay a bad invoice, and always explain the decision. T
 
 ## Implementation status
 
-The current build runs the pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), using the Grok provider when an API key is set and a deterministic mock provider otherwise, with the full set of validation checks. Items marked (planned) below are designed but not yet implemented. The build order is listed under [Scope](decisions.md#scope) in the decisions document. The planned items are recorded model responses and the run-level metrics.
+The current build runs the pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), using the Grok provider when an API key is set and a deterministic mock provider otherwise, with the full set of validation checks. Items marked (planned) below are designed but not yet implemented. The build order is listed under [Scope](decisions.md#scope) in the decisions document. The one planned item is recorded model responses.
 
 ## Workflow
 
@@ -183,6 +183,7 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 ## Running it
 
 - `python main.py --invoice_path=<file>` processes one invoice and prints the outcome and reasons.
+- `python main.py --batch=<dir>` processes every supported invoice in a directory and prints run metrics.
 - `python main.py --review` lists escalated invoices with their reasons.
 - `python main.py --reset` clears the ledger and reseeds the database.
 - `--offline` forces the offline provider even when an API key is set.
@@ -192,5 +193,5 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 - Any unexpected error escalates. The system never fails into a paid state.
 - Model calls get bounded retries with backoff, and both loops have hard caps.
 - Cost stays low because clean invoices and structured files never call the model. A cheaper model handles extraction, and a stronger one handles approval.
-- Run-level metrics are planned: the straight-through, escalation, and rejection rates, dollars paid versus held, and cost per invoice.
+- A batch run reports the straight-through, escalation, and rejection rates, dollars paid versus held, model token usage, and, when token prices are configured, the estimated cost.
 - All thresholds, tolerances, retry caps, and model names live in one config module.

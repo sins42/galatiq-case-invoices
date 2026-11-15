@@ -6,7 +6,7 @@ This document explains why the system is built the way it is, what was traded of
 
 Built: the full pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), with the mock provider and the Grok adapter, the ledger, the arithmetic, inventory, price, and currency checks, the escalation view, audit records, and tests.
 
-Added next, in order: batch processing and run metrics; recorded model responses; and finally the interactive review flow and a user interface.
+Added next, in order: recorded model responses; and finally the interactive review flow and a user interface.
 
 Out of scope: credit memos, and real purchase order and goods receipt feeds.
 
