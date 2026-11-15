@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .models import Finding, InvoiceData, Outcome
 from .normalize import item_key, number_key, vendor_key
@@ -64,6 +64,18 @@ def vendor_history(conn: sqlite3.Connection, vendor: str, limit: int = 20) -> li
         "WHERE vendor_key = ? ORDER BY id DESC LIMIT ?",
         (vendor_key(vendor), limit),
     ).fetchall()
+
+
+def recent_vendor_total(conn: sqlite3.Connection, vendor: str | None, days: int) -> float:
+    """Sum of a vendor's non-rejected invoice totals processed within the last `days`.
+    The cutoff is built in Python so it matches the stored timestamp format exactly."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    row = conn.execute(
+        "SELECT COALESCE(SUM(total), 0) AS total FROM invoices_processed "
+        "WHERE vendor_key = ? AND status != ? AND created_at >= ?",
+        (vendor_key(vendor), Outcome.REJECTED.value, cutoff),
+    ).fetchone()
+    return row["total"] or 0.0
 
 
 def escalated(conn: sqlite3.Connection) -> list[sqlite3.Row]:
