@@ -7,6 +7,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from . import formats
+
 
 class IngestionError(Exception):
     """The file cannot be loaded. The invoice is escalated, not rejected."""
@@ -24,12 +26,34 @@ def _read_json(path: Path) -> Any:
         return path.read_text(encoding="utf-8")
 
 
+def _read_csv(path: Path) -> Any:
+    text = path.read_text(encoding="utf-8")
+    # A known layout parses to a dict; anything else falls back to the model as text.
+    return formats.parse_csv(text) or text
+
+
+def _read_xml(path: Path) -> Any:
+    text = path.read_text(encoding="utf-8")
+    return formats.parse_xml(text) or text
+
+
+def _read_pdf(path: Path) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(path))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
 READERS: dict[str, Callable[[Path], Any]] = {
     "txt": _read_text,
     "json": _read_json,
+    "csv": _read_csv,
+    "xml": _read_xml,
+    "pdf": _read_pdf,
 }
 
-STRUCTURED_FORMATS = {"json"}
+# Formats that can parse to a dict. A reader that returns text instead falls back to the model.
+STRUCTURED_FORMATS = {"json", "csv", "xml"}
 
 
 def load(path: Path) -> tuple[str, Any]:
