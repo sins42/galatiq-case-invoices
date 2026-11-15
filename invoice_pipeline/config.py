@@ -62,6 +62,17 @@ class Settings:
     approval_model: str = "grok-4.6"
     llm_timeout_seconds: float = 60.0
     llm_max_retries: int = 3
+    # Token prices per million tokens. Set to estimate cost; left unset, cost is not reported.
+    price_in_per_mtok: float | None = None
+    price_out_per_mtok: float | None = None
+
+
+def _float_env(name: str) -> float | None:
+    value = os.getenv(name)
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
 
 
 def load_settings(**overrides) -> Settings:
@@ -73,5 +84,7 @@ def load_settings(**overrides) -> Settings:
         xai_base_url=os.getenv("XAI_BASE_URL") or Settings.xai_base_url,
         extraction_model=os.getenv("EXTRACTION_MODEL") or Settings.extraction_model,
         approval_model=os.getenv("APPROVAL_MODEL") or Settings.approval_model,
+        price_in_per_mtok=_float_env("INVOICE_PRICE_IN_PER_MTOK"),
+        price_out_per_mtok=_float_env("INVOICE_PRICE_OUT_PER_MTOK"),
     )
     return replace(settings, **overrides)

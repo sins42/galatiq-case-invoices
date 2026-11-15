@@ -9,10 +9,10 @@ import sys
 import uuid
 from pathlib import Path
 
-from . import db, ledger, logs
+from . import db, ledger, logs, metrics, readers
 from .config import load_settings
 from .graph import InvoicePipeline
-from .llm import LLMError, make_provider
+from .llm import LLMError, Provider, make_provider
 from .state import PipelineState
 
 
@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Process supplier invoices: ingest, validate, approve, pay.")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--invoice_path", metavar="PATH", help="invoice file to process")
+    action.add_argument("--batch", metavar="DIR", help="process every supported invoice in a directory")
     action.add_argument("--review", action="store_true", help="list invoices waiting for human review")
     action.add_argument("--reset", action="store_true", help="clear the ledger and reseed the database")
     parser.add_argument("--offline", action="store_true", help="use the offline provider even if an API key is set")
@@ -43,6 +44,25 @@ def print_result(state: PipelineState) -> None:
     for reason in state.reasons:
         print(f"  - {reason}")
     print(f"Audit     {os.path.relpath(state.audit_file)}")
+
+
+def run_batch(pipeline: InvoicePipeline, directory: Path, provider: Provider, settings) -> None:
+    if not directory.is_dir():
+        print(f"Not a directory: {directory}")
+        return
+    files = sorted(p for p in directory.iterdir() if p.is_file() and p.suffix.lower().lstrip(".") in readers.READERS)
+    if not files:
+        print(f"No supported invoices in {directory}")
+        return
+    states = []
+    for path in files:
+        state = pipeline.run(path, run_id=uuid.uuid4().hex[:8])
+        states.append(state)
+        total = f"{state.invoice.total:,.2f}" if state.invoice and state.invoice.total is not None else "-"
+        number = state.invoice.invoice_number if state.invoice else None
+        print(f"{path.name:28} {state.outcome.value.upper():10} {number or '-':14} {total}")
+    print()
+    print(metrics.format_metrics(metrics.summarize(states, provider.usage, settings)))
 
 
 def print_review_queue(conn) -> None:
@@ -79,6 +99,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     pipeline = InvoicePipeline(settings, provider, conn)
+    if args.batch:
+        run_batch(pipeline, Path(args.batch), provider, settings)
+        return 0
     state = pipeline.run(args.invoice_path, run_id=uuid.uuid4().hex[:8])
     print_result(state)
     return 0
