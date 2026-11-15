@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Urgency, manipulation, and prompt-injection language that should never be auto-approved.
+PRESSURE_PHRASES = (
+    "urgent", "immediate", "avoid penalties", "wire transfer", "asap",
+    "as soon as possible", "act now", "final notice", "ignore previous",
+    "ignore all previous", "disregard", "approve this invoice", "do not verify",
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -39,6 +47,11 @@ class Settings:
     runs_dir: Path
     scrutiny_threshold: float = 10_000.0
     cfo_threshold: float = 50_000.0
+    home_currency: str = "USD"
+    settleable_currencies: tuple[str, ...] = ("USD",)
+    as_of_date: dt.date | None = None
+    split_billing_window_days: int = 30
+    pressure_phrases: tuple[str, ...] = PRESSURE_PHRASES
     extraction_max_retries: int = 2
     critic_max_rounds: int = 2
     arithmetic_tolerance: Tolerance = Tolerance(over_pct=0.001, over_abs=1.00, under_pct=0.05, under_abs=1.00)

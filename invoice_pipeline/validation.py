@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,7 +12,16 @@ from enum import Enum
 from . import db, ledger
 from .config import Settings
 from .models import Finding, InvoiceData, Severity
-from .normalize import item_key, number_key, strip_qualifier, vendor_key, within_one_edit
+from .normalize import (
+    date_is_ambiguous,
+    is_relative_date,
+    item_key,
+    number_key,
+    parse_date,
+    strip_qualifier,
+    vendor_key,
+    within_one_edit,
+)
 
 
 class Route(str, Enum):
@@ -169,6 +180,30 @@ def check_arithmetic(invoice: InvoiceData, settings: Settings) -> list[Finding]:
     return findings
 
 
+def check_tax(invoice: InvoiceData, settings: Settings) -> list[Finding]:
+    """When the invoice states a tax rate, verify the written tax amount matches rate times base."""
+    if invoice.tax_rate is None or invoice.tax is None:
+        return []
+    base = invoice.subtotal
+    if base is None:
+        base = sum(
+            item.amount if item.amount is not None else (item.quantity or 0) * (item.unit_price or 0)
+            for item in invoice.line_items
+        ) or None
+    if base is None:
+        return []
+    expected = round(base * invoice.tax_rate, 2)
+    tolerance = settings.arithmetic_tolerance
+    gap = invoice.tax - expected
+    if gap > tolerance.over_band(expected) or -gap > tolerance.under_band(expected):
+        return [_finding(
+            "TAX_MISMATCH", Severity.WARNING,
+            f"Tax {_money(invoice.tax)} does not match the stated {invoice.tax_rate * 100:g}% rate on "
+            f"{_money(base)} (expected {_money(expected)}).",
+        )]
+    return []
+
+
 def check_inventory(invoice: InvoiceData, catalog: Catalog) -> list[Finding]:
     findings: list[Finding] = []
     demand: dict[str, int] = {}
@@ -193,7 +228,20 @@ def check_inventory(invoice: InvoiceData, catalog: Catalog) -> list[Finding]:
     return findings
 
 
+def check_currency(invoice: InvoiceData, settings: Settings) -> list[Finding]:
+    if invoice.currency and invoice.currency.upper() not in settings.settleable_currencies:
+        return [_finding(
+            "FOREIGN_CURRENCY", Severity.REVIEW,
+            f"Invoice is in {invoice.currency}, which the company does not settle directly.",
+        )]
+    return []
+
+
 def check_prices(invoice: InvoiceData, catalog: Catalog, settings: Settings) -> list[Finding]:
+    # Catalog prices are in the home currency. Comparing a foreign price to them without an
+    # FX rate is meaningless, so skip the check; the currency flag escalates the invoice anyway.
+    if invoice.currency and invoice.currency.upper() not in settings.settleable_currencies:
+        return []
     findings: list[Finding] = []
     tolerance = settings.price_tolerance
     for item in invoice.line_items:
@@ -216,6 +264,79 @@ def check_prices(invoice: InvoiceData, catalog: Catalog, settings: Settings) -> 
     return findings
 
 
+def check_vendor(invoice: InvoiceData, conn: sqlite3.Connection) -> list[Finding]:
+    if not invoice.vendor:
+        return []  # completeness handles a missing vendor
+    approved = {vendor_key(r["name"]) for r in conn.execute("SELECT name FROM vendors WHERE approved = 1").fetchall()}
+    if vendor_key(invoice.vendor) not in approved:
+        return [_finding(
+            "UNKNOWN_VENDOR", Severity.REVIEW, f"'{invoice.vendor}' is not an approved vendor.",
+        )]
+    return []
+
+
+def check_dates(invoice: InvoiceData, settings: Settings) -> list[Finding]:
+    findings: list[Finding] = []
+    as_of = settings.as_of_date or dt.date.today()
+    issue = parse_date(invoice.invoice_date)
+    due = parse_date(invoice.due_date)
+
+    if invoice.invoice_date is None:
+        findings.append(_finding("MISSING_DATE", Severity.WARNING, "No invoice date."))
+    if invoice.due_date is None:
+        findings.append(_finding("MISSING_DUE_DATE", Severity.WARNING, "No due date."))
+    elif is_relative_date(invoice.due_date):
+        findings.append(_finding(
+            "RELATIVE_DUE_DATE", Severity.REVIEW,
+            f"Due date is written as '{invoice.due_date}', not a real date.",
+        ))
+    if issue and issue > as_of:
+        findings.append(_finding(
+            "FUTURE_DATED", Severity.REVIEW, f"Invoice date {invoice.invoice_date} is in the future.",
+        ))
+    if issue and due and due < issue:
+        findings.append(_finding(
+            "DUE_BEFORE_ISSUE", Severity.WARNING,
+            f"Due date {invoice.due_date} is before the invoice date {invoice.invoice_date}.",
+        ))
+    if date_is_ambiguous(invoice.invoice_date):
+        findings.append(_finding(
+            "AMBIGUOUS_DATE", Severity.WARNING,
+            f"Invoice date {invoice.invoice_date} could be read as day/month or month/day.",
+        ))
+    return findings
+
+
+def check_pressure(invoice: InvoiceData, settings: Settings) -> list[Finding]:
+    text = " ".join(
+        part for part in [invoice.notes, invoice.payment_terms, *(li.note for li in invoice.line_items)] if part
+    ).lower()
+    # Match at a word boundary so "immediate" still catches "immediately" but "act now" does
+    # not fire on "contact now".
+    hits = sorted({phrase for phrase in settings.pressure_phrases if re.search(r"\b" + re.escape(phrase), text)})
+    if hits:
+        return [_finding(
+            "PRESSURE_LANGUAGE", Severity.REVIEW,
+            "Urgency or manipulation language in the free text: " + ", ".join(f"'{h}'" for h in hits) + ".",
+        )]
+    return []
+
+
+def check_split_billing(invoice: InvoiceData, conn: sqlite3.Connection, settings: Settings) -> list[Finding]:
+    total = invoice.total or 0
+    if total <= 0 or total >= settings.scrutiny_threshold or not invoice.vendor:
+        return []  # an invoice at the threshold already gets scrutiny on its own
+    prior = ledger.recent_vendor_total(conn, invoice.vendor, settings.split_billing_window_days)
+    combined = prior + total
+    if prior > 0 and combined >= settings.scrutiny_threshold:
+        return [_finding(
+            "SPLIT_BILLING", Severity.REVIEW,
+            f"This invoice ({_money(total)}) plus recent invoices from {invoice.vendor} total "
+            f"{_money(combined)}, over the scrutiny threshold of {_money(settings.scrutiny_threshold)}.",
+        )]
+    return []
+
+
 def run_checks(invoice: InvoiceData, conn: sqlite3.Connection, settings: Settings) -> list[Finding]:
     catalog = load_catalog(conn)
     checks: list[Callable[[], list[Finding]]] = [
@@ -223,8 +344,14 @@ def run_checks(invoice: InvoiceData, conn: sqlite3.Connection, settings: Setting
         lambda: check_completeness(invoice),
         lambda: check_integrity(invoice),
         lambda: check_arithmetic(invoice, settings),
+        lambda: check_tax(invoice, settings),
         lambda: check_inventory(invoice, catalog),
         lambda: check_prices(invoice, catalog, settings),
+        lambda: check_currency(invoice, settings),
+        lambda: check_vendor(invoice, conn),
+        lambda: check_dates(invoice, settings),
+        lambda: check_pressure(invoice, settings),
+        lambda: check_split_billing(invoice, conn, settings),
     ]
     return [finding for check in checks for finding in check()]
 
