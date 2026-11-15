@@ -13,7 +13,7 @@ from langgraph.graph import END, START, StateGraph
 
 from . import approval, audit, ledger, payment, readers, validation
 from .config import Settings
-from .extraction import from_structured, model_attempt, source_text
+from .extraction import apply_home_currency, from_structured, model_attempt, source_text
 from .llm import Provider
 from .logs import log_event
 from .models import Outcome
@@ -130,6 +130,7 @@ class InvoicePipeline:
         if state.method is None and structured:
             invoice = from_structured(state.raw_content)
             if invoice is not None:
+                apply_home_currency(invoice, self.settings.home_currency)
                 log_event("extracted", file=state.invoice_path, method="structured")
                 return {
                     "invoice": invoice,
@@ -143,6 +144,7 @@ class InvoicePipeline:
         detail = {"attempt": attempts, "prompt": attempt.prompt, "response": attempt.raw_output, "error": attempt.error}
 
         if attempt.invoice is not None:
+            apply_home_currency(attempt.invoice, self.settings.home_currency)
             log_event("extracted", file=state.invoice_path, method="model", attempts=attempts)
             return {
                 "invoice": attempt.invoice,

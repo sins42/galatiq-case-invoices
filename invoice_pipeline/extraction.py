@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from . import prompts
 from .llm import LLMRequest, Provider, parse_json_object
 from .models import InvoiceData
-from .normalize import fold, infer_currency
+from .normalize import fold, infer_currency, parse_rate
 
 
 def from_structured(data: Any) -> InvoiceData | None:
@@ -46,6 +46,7 @@ def from_structured(data: Any) -> InvoiceData | None:
                 ],
                 "subtotal": data.get("subtotal"),
                 "tax": data.get("tax_amount", data.get("tax")),
+                "tax_rate": parse_rate(data.get("tax_rate")),
                 "shipping": data.get("shipping"),
                 "total": data.get("total"),
                 "payment_terms": data.get("payment_terms"),
@@ -58,6 +59,14 @@ def from_structured(data: Any) -> InvoiceData | None:
 
 def source_text(content: Any) -> str:
     return content if isinstance(content, str) else json.dumps(content, indent=2)
+
+
+def apply_home_currency(invoice: InvoiceData, home_currency: str) -> InvoiceData:
+    """An invoice with no stated currency is assumed to be in the company's home currency.
+    Prices are checked against the home-currency catalog, so this is the safe assumption."""
+    if invoice.currency is None:
+        invoice.currency = home_currency
+    return invoice
 
 
 def _number_forms(value: float) -> list[str]:
@@ -123,4 +132,6 @@ def model_attempt(provider: Provider, text: str, previous_output: str | None, er
         return Attempt(None, raw, "Values not found in the invoice: " + "; ".join(problems), prompt)
     if invoice.currency is None:
         invoice.currency = infer_currency(text)
+    if invoice.tax_rate is not None:
+        invoice.tax_rate = parse_rate(invoice.tax_rate)
     return Attempt(invoice, raw, None, prompt)
