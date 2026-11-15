@@ -4,9 +4,9 @@ This document explains why the system is built the way it is, what was traded of
 
 ## Scope
 
-Built first: the full pipeline end to end on TXT and JSON invoices, with the mock provider and the Grok adapter, the ledger, the price check against catalog prices, the escalation view, audit records, and tests.
+Built: the full pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), with the mock provider and the Grok adapter, the ledger, the arithmetic, inventory, price, and currency checks, the escalation view, audit records, and tests.
 
-Added next, in order: CSV, XML, and PDF readers (with the currency check, since the XML sample is in EUR); the remaining vendor, date, pressure, and split-billing checks; batch processing and run metrics; recorded model responses; and finally the interactive review flow and a user interface.
+Added next, in order: batch processing and run metrics; recorded model responses; and finally the interactive review flow and a user interface.
 
 Out of scope: credit memos, and real purchase order and goods receipt feeds.
 
@@ -70,14 +70,14 @@ Near-matching numbers are only flagged when the vendor and total also match, bec
 | 1015 | csv | Clean, row-per-item layout | Pay |
 | 1016 | json | Unknown item WidgetC | Escalate |
 
-The outcomes above are the target behavior. The automated tests in `tests/` currently exercise the TXT and JSON rows. The CSV and XML invoices (1006, 1007, 1014, and 1015) escalate as an unsupported format until those readers are added, which is the correct safe behavior in the meantime.
+The automated tests in `tests/` run every invoice above end to end and assert these outcomes across all five formats.
 
 Extra test cases cover: quantity exactly at stock, a total exactly at the threshold, a rebill under a new number, a mistyped invoice number, a number collision, an injection note, a failed payment, and re-running a paid invoice.
 
 ## Known limitations and open questions
 
 - **Stock is not consumed.** Paying an invoice does not reduce stock, so two invoices could each pass against the same goods. Matching against purchase order quantities fixes this.
-- **Split billing.** Several invoices from one vendor, each just under 10,000, approve automatically, because they never reach the agent that checks vendor history. A split-billing check is planned for a later increment: it totals a vendor's invoices over a recent window and raises a Review flag when the sum crosses the threshold.
+- **Split billing.** Handled by a check that totals a vendor's non-rejected invoices over a recent window and raises a Review flag when the running sum crosses the scrutiny threshold. The window is based on processing time, so a production system would also key it on invoice dates.
 - **Credit memos.** Negative amounts are treated as errors, which is correct for this data but not for real credit notes.
 - **Audit log contents.** It stores full invoice text and prompts, so it needs redaction and retention rules before real use.
 - **SQLite.** SQLite allows only one writer at a time, which limits parallel processing. The production path is a server database such as Postgres, with no change to the data model.
