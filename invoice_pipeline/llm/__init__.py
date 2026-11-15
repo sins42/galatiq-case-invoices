@@ -1,7 +1,7 @@
 """Model providers behind one interface."""
 
 from ..config import Settings
-from .base import LLMError, LLMRequest, LLMResponse, Provider, Tool, parse_json_object
+from .base import LLMError, LLMRequest, LLMResponse, Provider, Tool, Usage, parse_json_object
 from .grok import GrokProvider
 from .mock import MockProvider
 
@@ -12,6 +12,7 @@ __all__ = [
     "MockProvider",
     "Provider",
     "Tool",
+    "Usage",
     "make_provider",
     "parse_json_object",
 ]

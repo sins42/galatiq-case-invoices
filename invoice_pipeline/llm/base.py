@@ -43,9 +43,21 @@ class LLMResponse:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass
+class Usage:
+    """One model call's token counts and latency, so runs can be measured and costed."""
+
+    role: str
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: float = 0.0
+
+
 class Provider(Protocol):
     name: str
     is_mock: bool
+    usage: list[Usage]
 
     def complete(self, request: LLMRequest) -> LLMResponse: ...
 

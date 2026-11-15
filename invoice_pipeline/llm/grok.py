@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import openai
 
 from ..config import Settings
-from .base import LLMError, LLMRequest, LLMResponse, run_tool
+from .base import LLMError, LLMRequest, LLMResponse, Usage, run_tool
 
 _MAX_TOOL_STEPS = 6
 
@@ -28,8 +29,11 @@ class GrokProvider:
             max_retries=settings.llm_max_retries,
         )
         self._models = {"extraction": settings.extraction_model, "approval": settings.approval_model}
+        self.usage: list[Usage] = []
 
     def complete(self, request: LLMRequest) -> LLMResponse:
+        started = time.perf_counter()
+        model = self._models[request.role]
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": request.system},
             {"role": "user", "content": request.user},
@@ -44,17 +48,24 @@ class GrokProvider:
                 for t in request.tools
             ]
         calls: list[dict[str, Any]] = []
+        input_tokens = output_tokens = 0
 
         for _ in range(_MAX_TOOL_STEPS):
             try:
                 response = self._client.chat.completions.create(
-                    model=self._models[request.role], messages=messages, temperature=0, **kwargs
+                    model=model, messages=messages, temperature=0, **kwargs
                 )
             except openai.OpenAIError as exc:
                 raise LLMError(f"Grok request failed: {exc}") from exc
 
+            usage = getattr(response, "usage", None)
+            if usage:
+                input_tokens += getattr(usage, "prompt_tokens", 0) or 0
+                output_tokens += getattr(usage, "completion_tokens", 0) or 0
+
             message = response.choices[0].message
             if not message.tool_calls:
+                self.usage.append(Usage(request.role, model, input_tokens, output_tokens, (time.perf_counter() - started) * 1000))
                 return LLMResponse(text=message.content or "", tool_calls=calls)
 
             messages.append(
