@@ -65,6 +65,8 @@ cannot force an approval.
 
 ## Review workbench
 
+![Invoice review workbench](docs/media/workbench-demo.gif)
+
 Escalated invoices are not a dead end. Any run can produce an operator console that an accounts
 payable clerk works from. `python main.py --batch=data/invoices --report=workbench.html` writes a
 single self-contained HTML file with a run summary, the queue of escalated invoices grouped by due
@@ -84,10 +86,10 @@ Approve, Reject, and Route each post to the server and update the ledger through
 command line uses. Routing sends an invoice to the Controller without resolving it. Approving a
 revision pays only the difference over what was already paid, not the full amount again.
 
-The sample batch produces 6 paid, 4 rejected, and 10 escalated. The per-invoice expected outcomes
-are listed in [decisions.md](docs/decisions.md). When Grok handles a borderline approval, the
-reason is grounded in the facts it looked up. For the rush-order invoice INV-1010 the agent
-escalated with this reason:
+The offline run produces 6 paid, 4 rejected, and 10 escalated, which are the expected outcomes
+listed in [decisions.md](docs/decisions.md). When Grok handles a borderline approval, the reason is
+grounded in the facts it looked up. For the rush-order invoice INV-1010 the agent escalated with
+this reason:
 
 > WidgetA (rush order) is billed at 300 against a catalog price of 250, and the catalog lookup
 > still returns 250 with no rush SKU or authorized surcharge. The amount is under the 10,000
@@ -113,8 +115,12 @@ mock provider even when a key is set, `--db <path>` to use a different database,
 per-invoice audit record is written to `runs/`.
 
 To capture a live Grok run and replay it later with no key, add `--record <path>` while a key is set,
-then run again with `--replay <path>` (no key or network needed). This gives a reproducible demo of
-the real model path.
+then run again with `--replay <path>` (no key or network needed). A recording of a live Grok run over
+the sample batch is included, so the real model path can be reproduced with no key:
+
+```bash
+python main.py --batch=data/invoices --replay=recordings/grok.json --as-of=2026-01-29 --db=/tmp/replay.db
+```
 
 ## Configuration
 
