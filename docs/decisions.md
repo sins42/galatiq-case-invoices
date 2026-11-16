@@ -4,9 +4,7 @@ This document explains why the system is built the way it is, what was traded of
 
 ## Scope
 
-Built first: the full pipeline end to end on TXT and JSON invoices, with the mock provider and the Grok adapter, the ledger, the price check against catalog prices, the escalation view, audit records, and tests.
-
-Added next, in order: CSV, XML, and PDF readers (with the currency check, since the XML sample is in EUR); the remaining vendor, date, pressure, and split-billing checks; batch processing and run metrics; recorded model responses; and finally the interactive review flow and a user interface.
+Built: the full pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), with the mock provider and the Grok adapter, record and replay of real model responses for offline runs, the full set of validation checks, the ledger, batch processing with run metrics and cost tracking, the human review flow (approve, reject, route) over both the CLI and a live localhost workbench with pay the difference on revisions, a self-contained HTML review workbench, audit records, and tests.
 
 Out of scope: credit memos, and real purchase order and goods receipt feeds.
 
@@ -38,7 +36,7 @@ Out of scope: credit memos, and real purchase order and goods receipt feeds.
 
 Near-matching numbers are only flagged when the vendor and total also match, because vendors number invoices sequentially and INV-1001 followed by INV-1002 is normal. A genuine repeat order has a new invoice number, so it is never auto-rejected. It escalates with the earlier invoice and the time gap attached, so a person can tell a repeat from a rebill.
 
-**9. Fuzzy matching only where it raises scrutiny.** Item names must match the catalog exactly after normalizing case and spacing. "WidgetC" is one letter away from "WidgetA", and a fuzzy match there would let an unknown item pass. A trailing qualifier such as "(rush order)" is stripped, but only an exact catalog match counts. Fuzzy matching is used for invoice numbers, where a near match triggers a review rather than a pass.
+**9. Fuzzy matching only where it raises scrutiny.** Item names must match the catalog exactly after normalizing case and spacing. "WidgetC" is one letter away from "WidgetA", and a fuzzy match there would let an unknown item pass. A trailing qualifier such as "(rush order)" is stripped, but only an exact catalog match counts. Vendor names follow the same rule: a trailing note such as "(formerly FastShip Ltd.)" is stripped so the invoice matches on the approved primary name, while a billing name that is not approved still escalates even when it claims a rename. Fuzzy matching is used for invoice numbers, where a near match triggers a review rather than a pass.
 
 **10. Tolerances are asymmetric.** Matching totals to the penny would flag ordinary rounding. Overcharges are only allowed at rounding scale, the larger of 0.1 percent or 1 dollar, so even small unexplained extras are flagged. INV-1013 has a 50 dollar gap that a 1 percent tolerance would have let through. Undercharges get a looser band, since being billed less is not a loss.
 
@@ -46,7 +44,7 @@ Near-matching numbers are only flagged when the vendor and total also match, bec
 
 **12. A full audit log.** Each stage records its inputs, outputs, and any prompt and model response, so every decision can be reconstructed. The cost is size and sensitivity. Redaction and retention are left for later.
 
-**13. The critic shares the approver's model.** The critic reviews the approver's draft on the same model that produced it. A separate or stronger critic model would be more independent and less likely to agree with reasoning it would have written itself, but there is no evidence yet that the shared-model critic rubber-stamps. The provider already keys models by role, so adding a separate critic slot is a small change. It is deferred until the eval harness exists and can measure whether a distinct critic model catches more bad approvals.
+**13. The critic shares the approver's model.** The critic reviews the approver's draft on the same model that produced it. A separate or stronger critic model would be more independent and less likely to agree with reasoning it would have written itself, but there is no evidence yet that the shared-model critic rubber-stamps. The provider already keys models by role, so adding a separate critic slot is a small change. It is deferred until there is evidence it helps: the eval harness (`--eval`) now measures unsafe approvals, so a distinct critic model can be judged against that number before taking on the extra cost.
 
 ## Expected outcomes for the sample invoices
 
@@ -70,14 +68,14 @@ Near-matching numbers are only flagged when the vendor and total also match, bec
 | 1015 | csv | Clean, row-per-item layout | Pay |
 | 1016 | json | Unknown item WidgetC | Escalate |
 
-The outcomes above are the target behavior. The automated tests in `tests/` currently exercise the TXT and JSON rows. The CSV and XML invoices (1006, 1007, 1014, and 1015) escalate as an unsupported format until those readers are added, which is the correct safe behavior in the meantime.
+The automated tests in `tests/` run every invoice above end to end and assert these outcomes across all five formats.
 
 Extra test cases cover: quantity exactly at stock, a total exactly at the threshold, a rebill under a new number, a mistyped invoice number, a number collision, an injection note, a failed payment, and re-running a paid invoice.
 
 ## Known limitations and open questions
 
 - **Stock is not consumed.** Paying an invoice does not reduce stock, so two invoices could each pass against the same goods. Matching against purchase order quantities fixes this.
-- **Split billing.** Several invoices from one vendor, each just under 10,000, approve automatically, because they never reach the agent that checks vendor history. A split-billing check is planned for a later increment: it totals a vendor's invoices over a recent window and raises a Review flag when the sum crosses the threshold.
+- **Split billing.** Handled by a check that totals a vendor's non-rejected invoices over a recent window and raises a Review flag when the running sum crosses the scrutiny threshold. The window is based on processing time, so a production system would also key it on invoice dates.
 - **Credit memos.** Negative amounts are treated as errors, which is correct for this data but not for real credit notes.
 - **Audit log contents.** It stores full invoice text and prompts, so it needs redaction and retention rules before real use.
 - **SQLite.** SQLite allows only one writer at a time, which limits parallel processing. The production path is a server database such as Postgres, with no change to the data model.

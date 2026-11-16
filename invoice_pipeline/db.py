@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS invoices_processed (
     reasons TEXT NOT NULL,
     payment_ref TEXT,
     invoice_json TEXT,
+    file_format TEXT,
+    method TEXT,
+    source_text TEXT,
+    approval TEXT,
+    assigned_to TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -86,9 +91,21 @@ def init_db(conn: sqlite3.Connection, reset: bool = False) -> None:
         for table in _TABLES:
             conn.execute(f"DROP TABLE IF EXISTS {table}")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.executemany("INSERT OR IGNORE INTO inventory VALUES (?, ?, ?)", SEED_INVENTORY)
     conn.executemany("INSERT OR IGNORE INTO vendors (name) VALUES (?)", [(v,) for v in SEED_VENDORS])
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive schema changes for databases created before a column existed."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(invoices_processed)")}
+    # assigned_to: the route action sets this to 'controller' without changing the outcome.
+    # file_format/method/source_text/approval let the live workbench rebuild the detail and
+    # source panes from the ledger alone, with no PipelineState in hand.
+    for column in ("file_format", "method", "source_text", "approval", "assigned_to"):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE invoices_processed ADD COLUMN {column} TEXT")
 
 
 def load_catalog(conn: sqlite3.Connection) -> list[sqlite3.Row]:

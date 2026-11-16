@@ -2,13 +2,13 @@
 
 ## Overview
 
-The system takes one invoice file and ends in exactly one of three outcomes: paid, rejected, or escalated to a human. Every outcome comes with a readable reason and a full audit record.
+The system takes one invoice file, in any of five formats, and ends in exactly one of three outcomes: paid, rejected, or escalated to a human. Every outcome comes with a readable reason and a full audit record.
 
 The guiding rule is: never pay a bad invoice, and always explain the decision. To make that hold, deterministic code makes every decision that moves money. The LLM is used only where it adds something code cannot: reading unstructured invoices, and weighing borderline approvals. The reasoning behind these choices is in [decisions.md](decisions.md).
 
 ## Implementation status
 
-This document describes the full target design. The current build runs the pipeline end to end on TXT and JSON invoices, using the Grok provider when an API key is set and a deterministic mock provider otherwise. Items marked (planned) below are designed but not yet implemented. The build order is listed under [Scope](decisions.md#scope) in the decisions document. The planned items are the XML, CSV, and PDF readers, the date, vendor, currency, pressure-language, and split-billing validation checks, recorded model responses, and the run-level metrics.
+The current build runs the pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), using the Grok provider when an API key is set and a deterministic mock provider otherwise, with the full set of validation checks. The build order is listed under [Scope](decisions.md#scope) in the decisions document.
 
 ## Workflow
 
@@ -91,10 +91,10 @@ Ingestion picks a reader by file extension and loads the content. Extraction tur
 | Format | What the samples look like | How it is read |
 |---|---|---|
 | JSON | Uniform, with a nested vendor object | Parsed directly |
-| XML | Uniform nested structure; one sample is in EUR | Parsed directly with a hardened parser (planned) |
-| CSV | Two layouts: vertical key-value, and one row per line item | Parsed directly for both known layouts, model fallback otherwise (planned) |
+| XML | Uniform nested structure; one sample is in EUR | Parsed directly with a hardened parser |
+| CSV | Two layouts: vertical key-value, and one row per line item | Parsed directly for both known layouts, model fallback otherwise |
 | TXT | Varied: labeled fields, misspelled headers, an email, column tables | Model |
-| PDF | Native text, no scans | Text extracted, then model (planned) |
+| PDF | Native text, no scans | Text extracted, then model |
 
 Rules that apply on every path:
 
@@ -111,22 +111,22 @@ Validation is plain code and makes no model call. It runs these checks and recor
 1. Duplicates and revisions, against the ledger, using a hash of the normalized invoice content.
 2. Completeness: invoice number, vendor, total, and at least one line item.
 3. Data integrity: no negative or zero quantities, no negative totals.
-4. Arithmetic: line amounts plus tax, shipping, and fees match the total, within a tolerance.
+4. Arithmetic: line amounts plus tax, shipping, and fees match the total, within a tolerance. When the invoice states a tax rate, such as "Tax (7%)", the written tax amount is also checked against the rate applied to the taxable base.
 5. Inventory: quantities are summed per item, then checked for unknown items, zero stock, and overstock.
-6. Price: each line's unit price against the catalog price, within a tolerance. An overcharge beyond rounding raises a Warning.
-7. Dates: present, parseable, not ambiguous, past-due status. (planned)
-8. Vendor: known and approved. (planned)
-9. Currency: one the company can settle. (planned)
-10. Pressure and injection language in free text. (planned)
-11. Split billing: a vendor's invoices over a recent window adding up past the scrutiny threshold. (planned)
+6. Price: each line's unit price against the catalog price, within a tolerance. An overcharge beyond rounding raises a Warning. Prices are only compared for settleable currencies, since comparing a foreign price to the home-currency catalog is not meaningful.
+7. Dates: a missing date or due date, a due date written as a word such as "yesterday", an invoice dated in the future, a due date before the issue date, and an ambiguous day/month date.
+8. Vendor: known and approved against the vendor master.
+9. Currency: one the company can settle. A foreign currency raises a Review flag. An invoice with no stated currency is assumed to be the home currency (USD), since prices are checked against the home-currency catalog.
+10. Pressure and injection language in free text, which raises a Review flag so manipulation never reaches the model.
+11. Split billing: a vendor's invoices over a recent window adding up past the scrutiny threshold.
 
 Each flag has a severity, and the severity decides the route:
 
 | Severity | Meaning | Route |
 |---|---|---|
 | Critical | Definitely invalid, nothing a human could fix (missing vendor or total, negative values, exact duplicate) | Reject |
-| Review | Suspicious but could be legitimate (unknown item, overstock, revision, possible rebill, number collision) | Escalate, without calling the model |
-| Warning | Soft signal (small arithmetic or price variance, past due) | Approval agent |
+| Review | Suspicious but could be legitimate (unknown item, overstock, revision, possible rebill, unknown vendor, foreign currency, relative or future date, pressure language, suspected split billing) | Escalate, without calling the model |
+| Warning | Soft signal (small arithmetic or price variance, a missing or ambiguous date) | Approval agent |
 
 An invoice with no flags under the scrutiny threshold (10,000 by default) is approved by code with no model call. Anything with only warnings, or at or above the threshold, goes to the approval agent.
 
@@ -136,7 +136,7 @@ The approval agent only sees invoices that passed the hard checks, so it only ha
 
 - It receives structured fields and findings, not the raw document. Free text is passed as labeled, untrusted data.
 - It can approve or escalate. It cannot reject, because rejection is reserved for the deterministic checks.
-- It can call read-only tools to look up stock, catalog price, and the vendor's recent invoices.
+- It can call five read-only tools: an item's catalog entry, its stock, its catalog price, the vendor's recent invoices, and this invoice number's prior history. None of them can approve or pay.
 - A critic reviews every proposed approval against the rules and findings, and must cite a specific flag or fact to object. The actor gets up to two rounds to resolve objections. If they do not agree, or the actor reverses itself, the invoice escalates.
 - Above the CFO threshold (50,000 by default), the invoice always escalates for human sign-off.
 - The final decision is the more cautious of the agent and the policy, so the model can never make an outcome less cautious.
@@ -154,7 +154,7 @@ Nodes call one interface: a prompt and a target schema in, a validated object ou
 1. xAI Grok, when an API key is set. The API is OpenAI-compatible, so other providers are easy to add.
 2. A deterministic mock, used when there is no key or when the run is forced offline, so the system always runs. The mock can return malformed output on demand to test the extraction loop.
 
-A third backend, recorded real responses replayed offline for the sample invoices, is planned.
+A third backend records real Grok responses to disk (`--record`) and replays them by request key offline (`--replay`), with no key or network, so the real-model path is reproducible. A recording over the sample batch is committed, and the mock still covers everything else.
 
 ## State and audit log
 
@@ -183,14 +183,25 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 ## Running it
 
 - `python main.py --invoice_path=<file>` processes one invoice and prints the outcome and reasons.
+- `python main.py --batch=<dir>` processes every supported invoice in a directory and prints run metrics.
 - `python main.py --review` lists escalated invoices with their reasons.
+- `python main.py --approve=<number>`, `--reject=<number>`, or `--route=<number>`, with `--reason`, resolves or routes an escalated invoice.
 - `python main.py --reset` clears the ledger and reseeds the database.
+- `--report=<path>` writes the self-contained HTML review workbench: a run summary, the escalation queue grouped by due date, and evidence-first invoice detail with the extracted lines and source document. Decisions in this static file are simulated in the browser.
+- `python main.py --serve [--port 8765]` serves the same workbench live from the ledger over `http.server` on localhost. Its Approve, Reject and Route actions POST to `/api/decision`, which calls the same `apply_decision` path as the CLI, so the live page writes real ledger decisions.
+- `--as-of=YYYY-MM-DD` sets the reference date used to group the workbench queue by due date and to run the date checks; it defaults to today.
 - `--offline` forces the offline provider even when an API key is set.
+- `--record=<path>` captures a live Grok run to a JSON file, and `--replay=<path>` replays it with no key or network, for a reproducible demo of the real model path.
+- `python main.py --eval [--provider grok --runs N]` scores the approval path against labeled cases (see Evaluation below); `--out=<path>` writes the report.
 
 ## Operations
 
 - Any unexpected error escalates. The system never fails into a paid state.
 - Model calls get bounded retries with backoff, and both loops have hard caps.
 - Cost stays low because clean invoices and structured files never call the model. A cheaper model handles extraction, and a stronger one handles approval.
-- Run-level metrics are planned: the straight-through, escalation, and rejection rates, dollars paid versus held, and cost per invoice.
+- A batch run reports the straight-through, escalation, and rejection rates, dollars paid versus held, model token usage, and, when token prices are configured, the estimated cost.
 - All thresholds, tolerances, retry caps, and model names live in one config module.
+
+## Evaluation
+
+The decision path is scored, not just demonstrated. `python main.py --eval` runs a set of invoices whose safe outcome is known through the real pipeline and counts unsafe approvals: paying an invoice a person should have held. Cases split into those the policy floor decides in code and those the model decides, so the eval covers both the guardrails and the agent's judgment. Each case runs on its own throwaway database, so runs are independent and parallel, and a nonzero exit code signals any unsafe approval. The latest live Grok result is in [eval-results.md](eval-results.md).

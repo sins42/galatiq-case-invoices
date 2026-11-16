@@ -7,10 +7,11 @@ Tests can queue scripted responses per task to exercise the self-correction loop
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
-from .base import LLMRequest, LLMResponse, run_tool
+from .base import LLMRequest, LLMResponse, Usage, run_tool
 from .text_parser import parse_text_invoice
 
 Scripted = str | Callable[[LLMRequest], str]
@@ -22,14 +23,20 @@ class MockProvider:
 
     def __init__(self, script: dict[str, list[Scripted]] | None = None):
         self._script = {task: list(items) for task, items in (script or {}).items()}
+        self.usage: list[Usage] = []
 
     def complete(self, request: LLMRequest) -> LLMResponse:
+        started = time.perf_counter()
         queued = self._script.get(request.task)
         if queued:
             item = queued.pop(0)
-            return LLMResponse(text=item(request) if callable(item) else item)
-        handler = {"extract": self._extract, "approve": self._approve, "critique": self._critique}[request.task]
-        return handler(request)
+            response = LLMResponse(text=item(request) if callable(item) else item)
+        else:
+            handler = {"extract": self._extract, "approve": self._approve, "critique": self._critique}[request.task]
+            response = handler(request)
+        # Record the call with zero tokens so offline and live runs report the same shape.
+        self.usage.append(Usage(request.role, "mock", 0, 0, (time.perf_counter() - started) * 1000))
+        return response
 
     @staticmethod
     def _extract(request: LLMRequest) -> LLMResponse:

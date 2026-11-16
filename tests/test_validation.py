@@ -1,11 +1,32 @@
 """Validation rules, normalization, and payment safety."""
 
+import dataclasses
+import datetime as dt
+
 from conftest import CLEAN_HIGH_VALUE
 
 from invoice_pipeline.models import InvoiceData, LineItem, Outcome
-from invoice_pipeline.normalize import infer_currency, number_key, parse_amount, within_one_edit
+from invoice_pipeline.normalize import (
+    date_is_ambiguous,
+    infer_currency,
+    is_relative_date,
+    number_key,
+    parse_amount,
+    parse_date,
+    within_one_edit,
+)
 from invoice_pipeline.payment import pay
-from invoice_pipeline.validation import check_arithmetic, check_prices, load_catalog, resolve_item
+from invoice_pipeline.validation import (
+    check_arithmetic,
+    check_currency,
+    check_dates,
+    check_prices,
+    check_pressure,
+    check_tax,
+    check_vendor,
+    load_catalog,
+    resolve_item,
+)
 
 
 def _invoice(**fields):
@@ -24,6 +45,65 @@ def test_currency_inferred_from_dollar_sign(run):
     assert infer_currency("Total: $5,000.00") == "USD"
     assert infer_currency("Total: 5000") is None
     assert run("invoice_1010.txt").invoice.currency == "USD"
+
+
+def test_foreign_currency_is_flagged(settings):
+    assert [f.code for f in check_currency(_invoice(currency="EUR"), settings)] == ["FOREIGN_CURRENCY"]
+    assert check_currency(_invoice(currency="USD"), settings) == []
+    assert check_currency(_invoice(currency=None), settings) == []
+
+
+def test_date_parsing_handles_sample_formats():
+    assert parse_date("2026-01-20") == dt.date(2026, 1, 20)
+    assert parse_date("Jan 30 2026") == dt.date(2026, 1, 30)
+    assert parse_date("January 27, 2026") == dt.date(2026, 1, 27)
+    assert parse_date("26-Jan-2O26") == dt.date(2026, 1, 26)  # OCR O read as zero
+    assert parse_date("yesterday") is None
+    assert is_relative_date("yesterday")
+    assert date_is_ambiguous("03/04/2026")
+    assert not date_is_ambiguous("01/28/2026")
+
+
+def test_unknown_vendor_is_flagged(conn):
+    assert [f.code for f in check_vendor(_invoice(vendor="Fraudster LLC"), conn)] == ["UNKNOWN_VENDOR"]
+    assert check_vendor(_invoice(vendor="Widgets Inc."), conn) == []
+
+
+def test_vendor_matches_on_primary_name_despite_a_rename_note(conn):
+    # An approved vendor billing under a "(formerly ...)" note still matches.
+    assert check_vendor(_invoice(vendor="QuickShip Distributers (formerly FastShip Ltd.)"), conn) == []
+    # But an unapproved primary name does not, even if it claims to now be an approved one.
+    assert [f.code for f in check_vendor(_invoice(vendor="FastShip Ltd. (now QuickShip Distributers)"), conn)] == ["UNKNOWN_VENDOR"]
+
+
+def test_relative_due_date_escalates(settings):
+    codes = {f.code for f in check_dates(_invoice(invoice_date="2026-01-20", due_date="yesterday"), settings)}
+    assert "RELATIVE_DUE_DATE" in codes
+
+
+def test_future_dated_invoice_is_flagged(settings):
+    as_of = dataclasses.replace(settings, as_of_date=dt.date(2026, 1, 1))
+    codes = {f.code for f in check_dates(_invoice(invoice_date="2026-06-01", due_date="2026-07-01"), as_of)}
+    assert "FUTURE_DATED" in codes
+
+
+def test_pressure_language_is_flagged(settings):
+    noisy = _invoice(notes="URGENT - pay immediately via wire transfer to avoid penalties")
+    assert [f.code for f in check_pressure(noisy, settings)] == ["PRESSURE_LANGUAGE"]
+    assert check_pressure(_invoice(notes="Thank you for your business"), settings) == []
+
+
+def test_tax_amount_checked_against_stated_rate(settings):
+    assert check_tax(_invoice(subtotal=1000.0, tax=70.0, tax_rate=0.07), settings) == []
+    bad = _invoice(subtotal=1000.0, tax=120.0, tax_rate=0.07)
+    assert [f.code for f in check_tax(bad, settings)] == ["TAX_MISMATCH"]
+    assert check_tax(_invoice(subtotal=1000.0, tax=70.0, tax_rate=None), settings) == []
+
+
+def test_price_check_skipped_for_non_settleable_currency(conn, settings):
+    catalog = load_catalog(conn)
+    over = _invoice(currency="EUR", line_items=[LineItem(name="WidgetA", quantity=1, unit_price=9999.0)], total=9999.0)
+    assert check_prices(over, catalog, settings) == []
 
 
 def test_qualifier_is_stripped_only_on_exact_catalog_match(conn):

@@ -12,7 +12,12 @@ from . import ledger, prompts
 from .config import Settings
 from .llm import LLMRequest, Provider, Tool, parse_json_object
 from .models import ApprovalProposal, CriticVerdict, Finding, InvoiceData
+from .normalize import number_key
 from .validation import load_catalog, resolve_item
+
+_ITEM_PARAM = {"type": "object", "properties": {"item": {"type": "string"}}, "required": ["item"]}
+_VENDOR_PARAM = {"type": "object", "properties": {"vendor": {"type": "string"}}, "required": ["vendor"]}
+_NUMBER_PARAM = {"type": "object", "properties": {"invoice_number": {"type": "string"}}, "required": ["invoice_number"]}
 
 
 def build_tools(conn: sqlite3.Connection) -> list[Tool]:
@@ -24,6 +29,14 @@ def build_tools(conn: sqlite3.Connection) -> list[Tool]:
             return {"item": item, "in_catalog": False}
         return {"item": entry.name, "in_catalog": True, "stock": entry.stock, "unit_price": entry.unit_price}
 
+    def get_item_stock(item: str) -> dict[str, Any]:
+        entry = resolve_item(item, load_catalog(conn))
+        return {"item": item, "in_catalog": entry is not None, "stock": entry.stock if entry else None}
+
+    def get_catalog_price(item: str) -> dict[str, Any]:
+        entry = resolve_item(item, load_catalog(conn))
+        return {"item": item, "in_catalog": entry is not None, "unit_price": entry.unit_price if entry else None}
+
     def get_vendor_history(vendor: str) -> dict[str, Any]:
         rows = ledger.vendor_history(conn, vendor)
         return {
@@ -33,19 +46,22 @@ def build_tools(conn: sqlite3.Connection) -> list[Tool]:
             "invoices": [dict(r) for r in rows],
         }
 
+    def get_invoice_history(invoice_number: str) -> dict[str, Any]:
+        rows = ledger.find_by_number(conn, number_key(invoice_number))
+        return {
+            "invoice_number": invoice_number,
+            "prior_count": len(rows),
+            "invoices": [
+                {"invoice_number": r["invoice_number"], "total": r["total"], "status": r["status"]} for r in rows
+            ],
+        }
+
     return [
-        Tool(
-            name="get_catalog_item",
-            description="Look up an item's stock level and catalog unit price.",
-            parameters={"type": "object", "properties": {"item": {"type": "string"}}, "required": ["item"]},
-            run=get_catalog_item,
-        ),
-        Tool(
-            name="get_vendor_history",
-            description="List the vendor's recently processed invoices and their combined total.",
-            parameters={"type": "object", "properties": {"vendor": {"type": "string"}}, "required": ["vendor"]},
-            run=get_vendor_history,
-        ),
+        Tool("get_catalog_item", "Look up an item's stock level and catalog unit price.", _ITEM_PARAM, get_catalog_item),
+        Tool("get_item_stock", "Look up only an item's stock level on hand.", _ITEM_PARAM, get_item_stock),
+        Tool("get_catalog_price", "Look up only an item's agreed catalog unit price.", _ITEM_PARAM, get_catalog_price),
+        Tool("get_vendor_history", "List the vendor's recently processed invoices and their combined total.", _VENDOR_PARAM, get_vendor_history),
+        Tool("get_invoice_history", "List prior processing of this invoice number, to spot revisions and re-bills.", _NUMBER_PARAM, get_invoice_history),
     ]
 
 

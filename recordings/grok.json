@@ -1,0 +1,197 @@
+{
+  "records": [
+    {
+      "key": "c1f01b08081e6c36",
+      "text": "{\n  \"invoice_number\": \"INV-1001\",\n  \"revision\": null,\n  \"vendor\": \"Widgets Inc.\",\n  \"invoice_date\": \"2026-01-15\",\n  \"due_date\": \"2026-02-01\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 10,\n      \"unit_price\": 250.00,\n      \"amount\": null,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 5,\n      \"unit_price\": 500.00,\n      \"amount\": null,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": 5000.00,\n  \"tax\": 0.00,\n  \"tax_rate\": 0.0,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 5000.00,\n  \"payment_terms\": \"Net 15\",\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1577,
+        "output_tokens": 220,
+        "latency_ms": 7086.199874989688
+      }
+    },
+    {
+      "key": "91dcf5b8b29dbc67",
+      "text": "{\n  \"invoice_number\": \"1002\",\n  \"revision\": null,\n  \"vendor\": \"Gadgets Co.\",\n  \"invoice_date\": \"Jan 30 2026\",\n  \"due_date\": \"2026-01-30\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"GadgetX\",\n      \"quantity\": 20,\n      \"unit_price\": 750,\n      \"amount\": null,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": null,\n  \"tax\": null,\n  \"tax_rate\": null,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 15000.00,\n  \"payment_terms\": \"Net 30\",\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1540,
+        "output_tokens": 168,
+        "latency_ms": 11670.601874997374
+      }
+    },
+    {
+      "key": "e244005b90c65e88",
+      "text": "{\n  \"invoice_number\": \"INV-1003\",\n  \"revision\": null,\n  \"vendor\": \"Fraudster LLC\",\n  \"invoice_date\": \"2026-01-20\",\n  \"due_date\": \"yesterday\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"FakeItem\",\n      \"quantity\": 100,\n      \"unit_price\": 1000.00,\n      \"amount\": null,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": null,\n  \"tax\": null,\n  \"tax_rate\": null,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 100000.00,\n  \"payment_terms\": \"Immediate\",\n  \"notes\": \"URGENT - Pay immediately to avoid penalties!!! Wire transfer preferred.\"\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1551,
+        "output_tokens": 178,
+        "latency_ms": 5033.822208002675
+      }
+    },
+    {
+      "key": "647544964fe88368",
+      "text": "{\n  \"invoice_number\": \"INV-1008\",\n  \"revision\": null,\n  \"vendor\": \"NoProd Industries\",\n  \"invoice_date\": \"2026-01-10\",\n  \"due_date\": \"2026-01-20\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"SuperGizmo\",\n      \"quantity\": 12,\n      \"unit_price\": 400.00,\n      \"amount\": null,\n      \"note\": null\n    },\n    {\n      \"name\": \"MegaSprocket\",\n      \"quantity\": 6,\n      \"unit_price\": 850.00,\n      \"amount\": null,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": null,\n  \"tax\": null,\n  \"tax_rate\": null,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 9900.00,\n  \"payment_terms\": null,\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1601,
+        "output_tokens": 211,
+        "latency_ms": 9945.021334046032
+      }
+    },
+    {
+      "key": "0a062a72f65cb9e6",
+      "text": "{\n  \"invoice_number\": \"INV-1010\",\n  \"revision\": null,\n  \"vendor\": \"Consolidated Materials Group\",\n  \"invoice_date\": \"January 27, 2026\",\n  \"due_date\": \"February 26, 2026\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 8,\n      \"unit_price\": 250.00,\n      \"amount\": 2000.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 4,\n      \"unit_price\": 500.00,\n      \"amount\": 2000.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"GadgetX\",\n      \"quantity\": 2,\n      \"unit_price\": 750.00,\n      \"amount\": 1500.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetA (rush order)\",\n      \"quantity\": 4,\n      \"unit_price\": 300.00,\n      \"amount\": 1200.00,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": 6700.00,\n  \"tax\": 335.00,\n  \"tax_rate\": null,\n  \"shipping\": 150.00,\n  \"other_fees\": null,\n  \"total\": 7185.00,\n  \"payment_terms\": \"Net 30\",\n  \"notes\": \"Thank you for your business!\"\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1655,
+        "output_tokens": 331,
+        "latency_ms": 9317.446917004418
+      }
+    },
+    {
+      "key": "36ac75ef024ea6fe",
+      "text": "{\"decision\": \"escalate\", \"rationale\": \"PRICE_ABOVE_CATALOG is unexplained: WidgetA (rush order) is billed at 300 vs catalog 250, there is no separate rush SKU, WidgetA stock is 15 so availability does not justify a premium, vendor notes add no facts, and the vendor has no prior invoice history. Amount is under the 10,000 threshold but the warning is not supported by the facts.\"}",
+      "tool_calls": [
+        {
+          "tool": "get_catalog_item",
+          "arguments": {
+            "item": "WidgetA"
+          },
+          "result": {
+            "item": "WidgetA",
+            "in_catalog": true,
+            "stock": 15,
+            "unit_price": 250.0
+          }
+        },
+        {
+          "tool": "get_catalog_item",
+          "arguments": {
+            "item": "WidgetB"
+          },
+          "result": {
+            "item": "WidgetB",
+            "in_catalog": true,
+            "stock": 10,
+            "unit_price": 500.0
+          }
+        },
+        {
+          "tool": "get_catalog_item",
+          "arguments": {
+            "item": "GadgetX"
+          },
+          "result": {
+            "item": "GadgetX",
+            "in_catalog": true,
+            "stock": 5,
+            "unit_price": 750.0
+          }
+        },
+        {
+          "tool": "get_catalog_item",
+          "arguments": {
+            "item": "WidgetA (rush order)"
+          },
+          "result": {
+            "item": "WidgetA",
+            "in_catalog": true,
+            "stock": 15,
+            "unit_price": 250.0
+          }
+        },
+        {
+          "tool": "get_vendor_history",
+          "arguments": {
+            "vendor": "Consolidated Materials Group"
+          },
+          "result": {
+            "vendor": "Consolidated Materials Group",
+            "invoice_count": 0,
+            "combined_total": 0,
+            "invoices": []
+          }
+        }
+      ],
+      "usage": {
+        "role": "approval",
+        "model": "grok-4.6",
+        "input_tokens": 3343,
+        "output_tokens": 167,
+        "latency_ms": 12255.869249987882
+      }
+    },
+    {
+      "key": "9157d76249e75512",
+      "text": "{\n  \"invoice_number\": \"INV-1011\",\n  \"revision\": null,\n  \"vendor\": \"Summit Manufacturing Co.\",\n  \"invoice_date\": \"2026-01-20\",\n  \"due_date\": \"2026-02-20\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 6,\n      \"unit_price\": 250.00,\n      \"amount\": 1500.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 3,\n      \"unit_price\": 500.00,\n      \"amount\": 1500.00,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": null,\n  \"tax\": null,\n  \"tax_rate\": null,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 3000.00,\n  \"payment_terms\": null,\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1550,
+        "output_tokens": 217,
+        "latency_ms": 8973.285500018392
+      }
+    },
+    {
+      "key": "bd71756bfdbf6c3a",
+      "text": "{\n  \"invoice_number\": \"INV-1011\",\n  \"revision\": null,\n  \"vendor\": \"Summit Manufacturing Co.\",\n  \"invoice_date\": \"2026-01-20\",\n  \"due_date\": \"2026-02-20\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 6,\n      \"unit_price\": 250.00,\n      \"amount\": 1500.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 3,\n      \"unit_price\": 500.00,\n      \"amount\": 1500.00,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": 3000.00,\n  \"tax\": 0.00,\n  \"tax_rate\": 0,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 3000.00,\n  \"payment_terms\": \"Net 30\",\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1595,
+        "output_tokens": 228,
+        "latency_ms": 13356.95400001714
+      }
+    },
+    {
+      "key": "3c88ec58bf2d3b6d",
+      "text": "{\n  \"invoice_number\": \"INV 1012\",\n  \"revision\": null,\n  \"vendor\": \"QuickShip Distributers (formerly FastShip Ltd.)\",\n  \"invoice_date\": \"26-Jan-2O26\",\n  \"due_date\": \"25-Feb-2026\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"Widget A\",\n      \"quantity\": 12,\n      \"unit_price\": 250,\n      \"amount\": 3000.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 7,\n      \"unit_price\": 500,\n      \"amount\": 3500.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"Gadget X\",\n      \"quantity\": 4,\n      \"unit_price\": 750,\n      \"amount\": 3000.00,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": 9500.00,\n  \"tax\": 475.00,\n  \"tax_rate\": 0.05,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 9975.00,\n  \"payment_terms\": \"Net 30\",\n  \"notes\": \"Ref PO-20260115. Deliver to warehouse dock B. Contact Jim at ext 4421 with questions.\"\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1685,
+        "output_tokens": 298,
+        "latency_ms": 11057.531292026397
+      }
+    },
+    {
+      "key": "b8cee3bba918ee02",
+      "text": "{\n  \"invoice_number\": \"INV 1012\",\n  \"revision\": null,\n  \"vendor\": \"QuickShip Distributers\\n         (formerly FastShip Ltd.)\",\n  \"invoice_date\": \"26-Jan-2O26\",\n  \"due_date\": \"25-Feb-2026\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"Widget A\",\n      \"quantity\": 12,\n      \"unit_price\": 250,\n      \"amount\": 3000.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 7,\n      \"unit_price\": 500,\n      \"amount\": 3500.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"Gadget X\",\n      \"quantity\": 4,\n      \"unit_price\": 750,\n      \"amount\": 3000.00,\n      \"note\": null\n    }\n  ],\n  \"subtotal\": 9500.00,\n  \"tax\": 475.00,\n  \"tax_rate\": 0.05,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 9975.00,\n  \"payment_terms\": \"Net 30\",\n  \"notes\": \"Ref PO-20260115. Deliver to\\n         warehouse dock B. Contact Jim\\n         at ext 4421 with questions.\"\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1685,
+        "output_tokens": 304,
+        "latency_ms": 12065.163958992343
+      }
+    },
+    {
+      "key": "bfa75c6874ae4fe4",
+      "text": "{\n  \"invoice_number\": \"INV-1013\",\n  \"revision\": null,\n  \"vendor\": \"Atlas Industrial Supply\",\n  \"invoice_date\": \"2026-01-24\",\n  \"due_date\": \"2026-03-24\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 15,\n      \"unit_price\": 250.00,\n      \"amount\": 3750.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 10,\n      \"unit_price\": 500.00,\n      \"amount\": 5000.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"GadgetX\",\n      \"quantity\": 5,\n      \"unit_price\": 750.00,\n      \"amount\": 3750.00,\n      \"note\": null\n    },\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 5,\n      \"unit_price\": 240.00,\n      \"amount\": 1200.00,\n      \"note\": \"Volume discount\"\n    },\n    {\n      \"name\": \"WidgetB\",\n      \"quantity\": 8,\n      \"unit_price\": 480.00,\n      \"amount\": 3840.00,\n      \"note\": \"Volume discount\"\n    },\n    {\n      \"name\": \"GadgetX\",\n      \"quantity\": 3,\n      \"unit_price\": 750.00,\n      \"amount\": 2250.00,\n      \"note\": \"Expedited\"\n    },\n    {\n      \"name\": \"WidgetA\",\n      \"quantity\": 2,\n      \"unit_price\": 250.00,\n      \"amount\": 500.00,\n      \"note\": \"Replacement\"\n    },\n    {\n      \"name\": \"GadgetX\",\n      \"quantity\": 1,\n      \"unit_price\": 750.00,\n      \"amount\": 750.00,\n      \"note\": \"Sample\"\n    }\n  ],\n  \"subtotal\": 21040.00,\n  \"tax\": 1472.80,\n  \"tax_rate\": 0.07,\n  \"shipping\": null,\n  \"other_fees\": null,\n  \"total\": 22562.80,\n  \"payment_terms\": \"Net 60\",\n  \"notes\": null\n}",
+      "tool_calls": [],
+      "usage": {
+        "role": "extraction",
+        "model": "grok-4.3",
+        "input_tokens": 1677,
+        "output_tokens": 509,
+        "latency_ms": 7214.152041007765
+      }
+    }
+  ]
+}

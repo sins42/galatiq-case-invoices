@@ -28,7 +28,14 @@ CLEAN_HIGH_VALUE = {
 
 @pytest.fixture
 def settings(tmp_path):
-    return load_settings(db_path=tmp_path / "test.db", runs_dir=tmp_path / "runs", xai_api_key=None)
+    # Pin token prices off so the suite is deterministic regardless of the developer's .env.
+    return load_settings(
+        db_path=tmp_path / "test.db",
+        runs_dir=tmp_path / "runs",
+        xai_api_key=None,
+        price_in_per_mtok=None,
+        price_out_per_mtok=None,
+    )
 
 
 @pytest.fixture

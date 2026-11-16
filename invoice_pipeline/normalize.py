@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 
 # Letters that OCR commonly confuses with digits.
 _CONFUSABLES = str.maketrans({"o": "0", "l": "1", "i": "1"})
 _QUALIFIER = re.compile(r"\s*\([^)]*\)\s*$")
 _CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP"}
+
+# Date words that are not real dates. A due date written like this needs review.
+_RELATIVE_DATES = {
+    "yesterday", "today", "tomorrow", "asap", "immediately", "now",
+    "on receipt", "upon receipt", "due on receipt", "end of day", "eod",
+}
+_DATE_FORMATS = [
+    "%Y-%m-%d", "%m/%d/%Y", "%b %d %Y", "%b %d, %Y", "%B %d %Y",
+    "%B %d, %Y", "%d-%b-%Y", "%d %b %Y", "%d-%B-%Y",
+]
+_SLASH_DATE = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\s*$")
 
 
 def infer_currency(text: str) -> str | None:
@@ -49,10 +61,60 @@ def parse_amount(text: str | None) -> float | None:
     return float(match.group()) if match else None
 
 
+_PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+
+
+def parse_rate(value: str | float | None) -> float | None:
+    """Normalize a tax rate to a fraction. '7%' and 'Tax (7%)' and 7 become 0.07; 0.07 stays 0.07."""
+    if value is None:
+        return None
+    text = str(value)
+    percent = _PERCENT.search(text)
+    if percent:
+        return float(percent.group(1)) / 100.0
+    number = parse_amount(text)
+    if number is None:
+        return None
+    return number / 100.0 if number > 1 else number
+
+
 def fold(text: str) -> str:
     """Reduce text to a comparable form for grounding: lowercase, alphanumerics and dots only,
     OCR confusables mapped to digits. Applied to both sides of a comparison."""
     return re.sub(r"[^a-z0-9.]", "", text.lower()).translate(_CONFUSABLES)
+
+
+def _fix_ocr_digits(text: str) -> str:
+    """'2O26' -> '2026': map the letter O to zero when next to a digit."""
+    return re.sub(r"(?<=\d)[Oo]|[Oo](?=\d)", "0", text)
+
+
+def parse_date(text: str | None) -> dt.date | None:
+    """Parse the date formats seen in the samples. Returns None if none match, so a parse
+    failure never becomes a validation flag on its own."""
+    if not text:
+        return None
+    cleaned = _fix_ocr_digits(text.strip())
+    for fmt in _DATE_FORMATS:
+        try:
+            return dt.datetime.strptime(cleaned, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def is_relative_date(text: str | None) -> bool:
+    """True for a word like 'yesterday' used in place of a real date."""
+    return (text or "").strip().lower() in _RELATIVE_DATES
+
+
+def date_is_ambiguous(text: str | None) -> bool:
+    """A slash date like 03/04/2026 could be read day/month or month/day. 01/28/2026 cannot."""
+    match = _SLASH_DATE.match(_fix_ocr_digits(text or ""))
+    if not match:
+        return False
+    first, second = int(match.group(1)), int(match.group(2))
+    return first <= 12 and second <= 12 and first != second
 
 
 def within_one_edit(a: str, b: str) -> bool:

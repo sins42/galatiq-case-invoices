@@ -50,6 +50,7 @@ class InvoiceData(BaseModel):
     line_items: list[LineItem] = Field(default_factory=list)
     subtotal: float | None = None
     tax: float | None = None
+    tax_rate: float | None = None
     shipping: float | None = None
     other_fees: float | None = None
     total: float | None = None
