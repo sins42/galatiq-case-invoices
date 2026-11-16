@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--as-of", metavar="YYYY-MM-DD", help="reference date for due-date grouping and date checks (default: today)")
     parser.add_argument("--report", metavar="PATH", help="write an HTML run report to PATH")
     parser.add_argument("--offline", action="store_true", help="use the offline provider even if an API key is set")
+    parser.add_argument("--record", metavar="PATH", help="record the live Grok responses to PATH for later replay")
+    parser.add_argument("--replay", metavar="PATH", help="replay recorded model responses from PATH (no API key needed)")
     parser.add_argument("--db", metavar="PATH", help="SQLite database path (default: inventory.db)")
     parser.add_argument("--log-level", default="INFO", help="log level for the structured logs on stderr")
     return parser
@@ -190,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        provider = make_provider(settings, offline=args.offline)
+        provider = make_provider(settings, offline=args.offline, record_path=args.record, replay_path=args.replay)
     except LLMError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
