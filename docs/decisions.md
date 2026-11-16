@@ -4,9 +4,7 @@ This document explains why the system is built the way it is, what was traded of
 
 ## Scope
 
-Built: the full pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), with the mock provider and the Grok adapter, the full set of validation checks, the ledger, batch processing with run metrics and cost tracking, the human review flow (approve, reject, route) over both the CLI and a live localhost workbench, a self-contained HTML review workbench, audit records, and tests.
-
-Added next: recorded model responses, to replay real model output offline.
+Built: the full pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), with the mock provider and the Grok adapter, record and replay of real model responses for offline runs, the full set of validation checks, the ledger, batch processing with run metrics and cost tracking, the human review flow (approve, reject, route) over both the CLI and a live localhost workbench with pay the difference on revisions, a self-contained HTML review workbench, audit records, and tests.
 
 Out of scope: credit memos, and real purchase order and goods receipt feeds.
 

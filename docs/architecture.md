@@ -191,6 +191,7 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 - `python main.py --serve [--port 8765]` serves the same workbench live from the ledger over `http.server` on localhost. Its Approve, Reject and Route actions POST to `/api/decision`, which calls the same `apply_decision` path as the CLI, so the live page writes real ledger decisions.
 - `--as-of=YYYY-MM-DD` sets the reference date used to group the workbench queue by due date and to run the date checks; it defaults to today.
 - `--offline` forces the offline provider even when an API key is set.
+- `--record=<path>` captures a live Grok run to a JSON file, and `--replay=<path>` replays it with no key or network, for a reproducible demo of the real model path.
 
 ## Operations
 
