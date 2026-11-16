@@ -51,6 +51,15 @@ def test_asof_flag_parses_and_rejects_bad_dates(tmp_path):
     assert cli.main(["--review", "--as-of", "not-a-date", "--db", db]) == 2
 
 
+def test_revision_item_shows_pay_the_difference(run, conn, settings):
+    run("invoice_1004.json")              # original, 1,890 paid
+    run("invoice_1004_revised.json")      # revision escalates
+    vm = workbench.build_view_model_from_ledger(conn, settings)
+    rev = next(q for q in vm["queue"] if q["invoice_number"] == "INV-1004")
+    assert rev["prior_paid"] == 1890.0 and rev["pay_difference"] == 4050.0
+    assert "Approving pays only the difference" in workbench.render(vm, live=True)
+
+
 def test_render_is_complete_at_rest(settings, conn):
     states, provider = _run_full_batch(settings, conn)
     html = workbench.render(workbench.build_view_model(states, metrics.summarize(states, [], settings), settings, load_catalog(conn)))

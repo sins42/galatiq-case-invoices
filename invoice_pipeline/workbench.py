@@ -19,6 +19,7 @@ from .extraction import source_text
 from .metrics import Metrics
 from .models import InvoiceData, Outcome
 from .normalize import is_relative_date, item_key, parse_date
+from .payment import amount_paid
 from .state import PipelineState
 from .validation import Catalog, load_catalog, resolve_item
 
@@ -236,7 +237,7 @@ def _key(state: PipelineState) -> str:
 def _item(
     *, key: str, invoice: InvoiceData, findings: list, reasons: list[str], source_file: str,
     file_format: str | None, method: str | None, src_text: str, approval: str | None,
-    assigned_to: str | None, settings: Settings, catalog: Catalog, as_of: dt.date,
+    assigned_to: str | None, settings: Settings, catalog: Catalog, as_of: dt.date, conn=None,
 ) -> dict:
     """Build one escalated-invoice queue item. Shared by the batch and ledger paths."""
     amount = invoice.total or 0
@@ -244,6 +245,13 @@ def _item(
     due_days, relative, group, due_label = _due(invoice.due_date, as_of)
     clean_reasons = [r for r in reasons if not r.startswith(("Reviewer:", "Routed to"))]
     routed = bool(assigned_to)
+    # On a revision, show what was already paid so a reviewer approves only the difference.
+    prior_paid = pay_difference = None
+    if conn is not None and any(f.code == "REVISION_OF_PRIOR" for f in findings):
+        already = amount_paid(conn, invoice)
+        if already > 0:
+            prior_paid = round(already, 2)
+            pay_difference = round(amount - already, 2)
     return {
         "key": key,
         "invoice_number": invoice.invoice_number,
@@ -252,6 +260,8 @@ def _item(
         "format": (file_format or "").upper(),
         "method": method,
         "total": amount,
+        "prior_paid": prior_paid,
+        "pay_difference": pay_difference,
         "currency": invoice.currency or "",
         "invoice_date": invoice.invoice_date,
         "due_date": invoice.due_date,
@@ -305,7 +315,7 @@ def _assemble(recs: list[dict], queue: list[dict], run: dict) -> dict:
 
 
 def build_view_model(
-    states: list[PipelineState], metrics: Metrics, settings: Settings, catalog: Catalog
+    states: list[PipelineState], metrics: Metrics, settings: Settings, catalog: Catalog, conn=None
 ) -> dict:
     as_of = settings.as_of_date or dt.date.today()
     recs, queue = [], []
@@ -320,7 +330,7 @@ def build_view_model(
                 key=_key(state), invoice=inv, findings=state.findings, reasons=state.reasons,
                 source_file=Path(state.invoice_path).name, file_format=state.file_format, method=state.method,
                 src_text=source_text(state.raw_content), approval="agent_escalated" if state.proposal else "skipped",
-                assigned_to=None, settings=settings, catalog=catalog, as_of=as_of,
+                assigned_to=None, settings=settings, catalog=catalog, as_of=as_of, conn=conn,
             ))
     run = {"id": states[0].run_id if states else "", "finished_at": dt.datetime.now().strftime("%a %b %d %Y %H:%M"),
            "file_count": len(recs)}
@@ -348,7 +358,7 @@ def build_view_model_from_ledger(conn, settings: Settings) -> dict:
                 key=f'{row["number_key"] or "NA"}_{row["source_file"]}', invoice=invoice, findings=findings,
                 reasons=detail.get("reasons", []), source_file=row["source_file"], file_format=row["file_format"],
                 method=row["method"], src_text=row["source_text"] or "", approval=row["approval"],
-                assigned_to=row["assigned_to"], settings=settings, catalog=catalog, as_of=as_of,
+                assigned_to=row["assigned_to"], settings=settings, catalog=catalog, as_of=as_of, conn=conn,
             ))
     run = {"id": last_run or "ledger", "finished_at": dt.datetime.now().strftime("%a %b %d %Y %H:%M"),
            "file_count": len(recs)}
@@ -442,6 +452,14 @@ def _detail(q: dict) -> str:
     meta += f' · owner: {_e(q["owner"])}'
     flags = "".join(_flag_chip(f) for f in q["findings"])
     method_note = _FORMAT_METHOD.get(q["method"], "")
+    revnote = ""
+    if q.get("pay_difference") is not None:
+        if q["pay_difference"] > 0:
+            revnote = (f'<div class="revnote">Approving pays only the difference: {_m(q["pay_difference"])} '
+                       f'{_e(q["currency"])} ({_m(q["prior_paid"])} already paid on this number).</div>')
+        else:
+            revnote = (f'<div class="revnote">{_m(q["prior_paid"])} already paid, at or above this total. '
+                       f'Approving records it with no further payment.</div>')
     return f'''<div class="dv" data-key="{_e(q["key"])}" data-amt="{q["total"]}" data-number="{_e(q["invoice_number"])}">
   <div class="d-head">
     <div class="d-head-l">
@@ -466,6 +484,7 @@ def _detail(q: dict) -> str:
     <div class="dec-open">
       <div class="dec-labs"><span class="sec-t">Your decision</span>
         <span class="dec-hint">Recorded on the ledger with your name and reason</span></div>
+      {revnote}
       <div class="presets">
         <button type="button" class="preset">Confirmed with vendor</button>
         <button type="button" class="preset">Stock arriving on open PO</button>
@@ -649,14 +668,14 @@ def render(view_model: dict, live: bool = False) -> str:
 </body></html>'''
 
 
-def render_report(states: list[PipelineState], metrics: Metrics, settings: Settings, catalog: Catalog) -> str:
-    return render(build_view_model(states, metrics, settings, catalog))
+def render_report(states: list[PipelineState], metrics: Metrics, settings: Settings, catalog: Catalog, conn=None) -> str:
+    return render(build_view_model(states, metrics, settings, catalog, conn=conn))
 
 
 def write(path: Path, states: list[PipelineState], metrics: Metrics, settings: Settings, conn) -> Path:
     catalog = load_catalog(conn)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_report(states, metrics, settings, catalog), encoding="utf-8")
+    path.write_text(render_report(states, metrics, settings, catalog, conn=conn), encoding="utf-8")
     return path
 
 
@@ -830,6 +849,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-
 .decision{border-top:1px solid var(--border);padding:14px 22px}
 .dec-labs{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .dec-hint{font-size:11.5px;color:var(--faint)}
+.revnote{font-size:12.5px;color:var(--accent);background:var(--sel);border:1px solid var(--border);border-radius:7px;padding:8px 11px}
 .presets{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .preset{border:1px dashed var(--border-2);background:var(--surface-2);color:var(--muted);border-radius:6px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
 .dec-row{display:flex;gap:8px}

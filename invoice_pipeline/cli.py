@@ -102,11 +102,25 @@ def apply_decision(conn, number: str, decision: str, reason: str) -> dict:
     if decision == "approve":
         if not row["invoice_json"]:
             return {"ok": False, "error": f"{number} has no stored invoice data to pay."}
-        result = payment.pay(conn, InvoiceData.model_validate_json(row["invoice_json"]), payment.mock_payment)
+        invoice = InvoiceData.model_validate_json(row["invoice_json"])
+        total = invoice.total or 0
+        detail = json.loads(row["reasons"]) if row["reasons"] else {"findings": []}
+        is_revision = any(f.get("code") == "REVISION_OF_PRIOR" for f in detail.get("findings", []))
+        # Net only for a genuine revision; a number shared across vendors is paid in full.
+        already = payment.amount_paid(conn, invoice) if is_revision else 0.0
+        due = round(total - already, 2)
+        msg = reason or "Approved by reviewer"
+        if already > 0 and due <= 0:
+            ledger.resolve(conn, row["id"], Outcome.PAID.value, f"{msg}; no payment due, already settled", None)
+            return {"ok": True, "status": "paid", "paid": 0.0, "reference": None, "row": _public_row(conn, row["id"])}
+        pay_amount = due if already > 0 else total
+        result = payment.pay(conn, invoice, payment.mock_payment, amount=pay_amount)
         if result.get("status") != "success":
             return {"ok": False, "error": f"{number} payment failed, nothing was paid."}
-        ledger.resolve(conn, row["id"], Outcome.PAID.value, reason or "Approved by reviewer", result["reference"])
-        return {"ok": True, "status": "paid", "reference": result["reference"], "row": _public_row(conn, row["id"])}
+        if already > 0:
+            msg = f"{msg}; paid difference {pay_amount:,.2f} (new {total:,.2f} over prior {already:,.2f})"
+        ledger.resolve(conn, row["id"], Outcome.PAID.value, msg, result["reference"])
+        return {"ok": True, "status": "paid", "paid": pay_amount, "reference": result["reference"], "row": _public_row(conn, row["id"])}
     if decision == "reject":
         ledger.resolve(conn, row["id"], Outcome.REJECTED.value, reason, None)
         return {"ok": True, "status": "rejected", "row": _public_row(conn, row["id"])}
