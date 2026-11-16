@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--provider", choices=["mock", "grok"], default="mock", help="provider for --eval (default: mock)")
     parser.add_argument("--runs", type=int, default=1, help="runs per case for --eval (default 1; use more for live variance)")
     parser.add_argument("--workers", type=int, default=4, help="parallel workers for --eval (default 4)")
+    parser.add_argument("--out", metavar="PATH", help="write the --eval report to PATH (otherwise it only prints)")
     parser.add_argument("--log-level", default="INFO", help="log level for the structured logs on stderr")
     return parser
 
@@ -159,8 +160,9 @@ def print_review_queue(conn) -> None:
         print()
 
 
-def run_eval(settings, provider_name: str, runs: int, workers: int = 4) -> int:
-    """Score the approval agent against labeled ideal decisions and write docs/eval-results.md."""
+def run_eval(settings, provider_name: str, runs: int, workers: int = 4, out: str | None = None) -> int:
+    """Score the approval agent against labeled ideal decisions, print the report, and optionally
+    write it to `out`. Exit code is nonzero when any unsafe approval is found."""
     from . import evals
     from .llm import MockProvider
 
@@ -176,13 +178,10 @@ def run_eval(settings, provider_name: str, runs: int, workers: int = 4) -> int:
 
     report = evals.evaluate(factory, settings, runs=runs, provider_name=provider_name, workers=workers)
     markdown = evals.format_markdown(report)
-    out = Path("docs/eval-results.md")
-    if out.parent.is_dir():
-        out.write_text(markdown)
-        print(markdown)
-        print(f"Written    {out}")
-    else:
-        print(markdown)
+    print(markdown)
+    if out:
+        Path(out).write_text(markdown)
+        print(f"Written    {out}", file=sys.stderr)
     return 0 if report.unsafe == 0 else 1
 
 
@@ -222,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         serve.run(settings, args.port)
         return 0
     if args.eval:
-        return run_eval(settings, args.provider, args.runs, args.workers)
+        return run_eval(settings, args.provider, args.runs, args.workers, args.out)
 
     try:
         provider = make_provider(settings, offline=args.offline, record_path=args.record, replay_path=args.replay)
