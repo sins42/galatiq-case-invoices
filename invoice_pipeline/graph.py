@@ -270,6 +270,10 @@ class InvoicePipeline:
             findings=state.findings,
             reasons=state.reasons,
             payment_ref=(state.payment or {}).get("reference") if outcome is Outcome.PAID else None,
+            file_format=state.file_format,
+            method=state.method,
+            source_text=source_text(state.raw_content) if state.raw_content is not None else None,
+            approval="agent_escalated" if state.proposal else "skipped",
         )
         final_event = audit.event("finalize", outcome.value, "; ".join(state.reasons))
         record = {

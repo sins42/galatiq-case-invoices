@@ -90,6 +90,35 @@ def escalated(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def escalated_for_number(conn: sqlite3.Connection, number: str) -> list[sqlite3.Row]:
+    """Escalated rows matching an invoice number, so a reviewer can resolve them."""
+    return [r for r in find_by_number(conn, number_key(number)) if r["status"] == Outcome.ESCALATED.value]
+
+
+def resolve(conn: sqlite3.Connection, row_id: int, status: str, reason: str, payment_ref: str | None) -> None:
+    """Record a reviewer's decision on an escalated invoice."""
+    row = conn.execute("SELECT reasons FROM invoices_processed WHERE id = ?", (row_id,)).fetchone()
+    detail = json.loads(row["reasons"]) if row and row["reasons"] else {"reasons": [], "findings": []}
+    detail["reasons"] = (detail.get("reasons") or []) + [f"Reviewer: {reason}"]
+    conn.execute(
+        "UPDATE invoices_processed SET status = ?, reasons = ?, payment_ref = ? WHERE id = ?",
+        (status, json.dumps(detail), payment_ref, row_id),
+    )
+    conn.commit()
+
+
+def assign(conn: sqlite3.Connection, row_id: int, assignee: str, reason: str) -> None:
+    """Route an escalated invoice to someone without resolving it. The outcome stays escalated."""
+    row = conn.execute("SELECT reasons FROM invoices_processed WHERE id = ?", (row_id,)).fetchone()
+    detail = json.loads(row["reasons"]) if row and row["reasons"] else {"reasons": [], "findings": []}
+    detail["reasons"] = (detail.get("reasons") or []) + [f"Routed to {assignee}: {reason}"]
+    conn.execute(
+        "UPDATE invoices_processed SET assigned_to = ?, reasons = ? WHERE id = ?",
+        (assignee, json.dumps(detail), row_id),
+    )
+    conn.commit()
+
+
 def record(
     conn: sqlite3.Connection,
     *,
@@ -100,11 +129,16 @@ def record(
     findings: list[Finding],
     reasons: list[str],
     payment_ref: str | None,
+    file_format: str | None = None,
+    method: str | None = None,
+    source_text: str | None = None,
+    approval: str | None = None,
 ) -> None:
     conn.execute(
         "INSERT INTO invoices_processed (run_id, source_file, invoice_number, number_key, vendor, "
         "vendor_key, content_hash, bill_hash, total, currency, status, reasons, payment_ref, "
-        "invoice_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "invoice_json, file_format, method, source_text, approval, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             run_id,
             source_file,
@@ -120,6 +154,10 @@ def record(
             json.dumps({"reasons": reasons, "findings": [f.model_dump(mode="json") for f in findings]}),
             payment_ref,
             invoice.model_dump_json() if invoice else None,
+            file_format,
+            method,
+            source_text,
+            approval,
             datetime.now(timezone.utc).isoformat(timespec="seconds"),
         ),
     )
