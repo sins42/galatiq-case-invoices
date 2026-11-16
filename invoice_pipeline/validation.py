@@ -326,7 +326,9 @@ def check_split_billing(invoice: InvoiceData, conn: sqlite3.Connection, settings
     total = invoice.total or 0
     if total <= 0 or total >= settings.scrutiny_threshold or not invoice.vendor:
         return []  # an invoice at the threshold already gets scrutiny on its own
-    prior = ledger.recent_vendor_total(conn, invoice.vendor, settings.split_billing_window_days)
+    prior = ledger.recent_vendor_total(
+        conn, invoice.vendor, settings.split_billing_window_days, number_key(invoice.invoice_number)
+    )
     combined = prior + total
     if prior > 0 and combined >= settings.scrutiny_threshold:
         return [_finding(

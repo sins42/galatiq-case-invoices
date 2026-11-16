@@ -23,3 +23,15 @@ def test_batch_metrics_and_cost(settings, conn):
 
     priced = dataclasses.replace(settings, price_in_per_mtok=1.0, price_out_per_mtok=1.0)
     assert metrics.estimated_cost(provider.usage, priced) == 0.0  # the mock reports zero tokens
+
+
+def test_exact_duplicate_is_not_double_counted_in_dollars(settings, conn):
+    provider = MockProvider()
+    pipeline = InvoicePipeline(settings, provider, conn)
+    first = pipeline.run(SAMPLES / "invoice_1011.pdf", run_id="a")  # paid, 3000
+    second = pipeline.run(SAMPLES / "invoice_1011.txt", run_id="b")  # rejected duplicate
+
+    m = metrics.summarize([first, second], provider.usage, settings)
+    assert m.dollars_paid == 3000.0
+    assert m.dollars_held == 0.0  # the duplicate is not counted again
+    assert m.rejected == 1  # but it is still a processed file

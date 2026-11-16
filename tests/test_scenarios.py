@@ -42,6 +42,13 @@ def test_structured_files_skip_the_model(run):
     assert run("invoice_1011.pdf").method == "model"
 
 
+def test_duplicate_resubmission_is_not_counted_as_split_billing(run):
+    assert run("invoice_1012.pdf").outcome is Outcome.PAID
+    codes = {f.code for f in run("invoice_1012.txt").findings}
+    assert "DUPLICATE_INVOICE" in codes
+    assert "SPLIT_BILLING" not in codes
+
+
 def test_missing_currency_defaults_to_home_currency(run):
     # The CSV samples state no currency, so they are treated as USD.
     assert run("invoice_1006.csv").invoice.currency == "USD"

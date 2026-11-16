@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .config import Settings
+from .ledger import content_hash
 from .llm import Usage
 from .models import Outcome
 from .state import PipelineState
@@ -52,16 +53,30 @@ def estimated_cost(usage: Iterable[Usage], settings: Settings) -> float | None:
 
 
 def summarize(states: list[PipelineState], usage: list[Usage], settings: Settings) -> Metrics:
-    def dollars(outcomes: set[Outcome]) -> float:
-        return round(sum(s.invoice.total or 0 for s in states if s.invoice and s.outcome in outcomes), 2)
+    # Count dollars per unique invoice: an exact duplicate re-submission is the same money,
+    # so it is not added again. Outcome counts still reflect every file processed.
+    seen: set[str] = set()
+    dollars_paid = dollars_held = 0.0
+    for state in states:
+        if not state.invoice or state.outcome is None:
+            continue
+        key = content_hash(state.invoice)
+        if key in seen:
+            continue
+        seen.add(key)
+        amount = state.invoice.total or 0
+        if state.outcome is Outcome.PAID:
+            dollars_paid += amount
+        elif state.outcome in (Outcome.ESCALATED, Outcome.REJECTED):
+            dollars_held += amount
 
     return Metrics(
         total=len(states),
         paid=sum(1 for s in states if s.outcome is Outcome.PAID),
         rejected=sum(1 for s in states if s.outcome is Outcome.REJECTED),
         escalated=sum(1 for s in states if s.outcome is Outcome.ESCALATED),
-        dollars_paid=dollars({Outcome.PAID}),
-        dollars_held=dollars({Outcome.ESCALATED, Outcome.REJECTED}),
+        dollars_paid=round(dollars_paid, 2),
+        dollars_held=round(dollars_held, 2),
         model_calls=len(usage),
         input_tokens=sum(u.input_tokens for u in usage),
         output_tokens=sum(u.output_tokens for u in usage),

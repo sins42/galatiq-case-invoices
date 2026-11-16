@@ -66,16 +66,22 @@ def vendor_history(conn: sqlite3.Connection, vendor: str, limit: int = 20) -> li
     ).fetchall()
 
 
-def recent_vendor_total(conn: sqlite3.Connection, vendor: str | None, days: int) -> float:
-    """Sum of a vendor's non-rejected invoice totals processed within the last `days`.
+def recent_vendor_total(
+    conn: sqlite3.Connection, vendor: str | None, days: int, exclude_number: str | None = None
+) -> float:
+    """Sum of a vendor's non-rejected invoice totals processed within the last `days`, skipping
+    any re-submission or revision of `exclude_number` so the same invoice is not counted twice.
     The cutoff is built in Python so it matches the stored timestamp format exactly."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
-    row = conn.execute(
+    sql = (
         "SELECT COALESCE(SUM(total), 0) AS total FROM invoices_processed "
-        "WHERE vendor_key = ? AND status != ? AND created_at >= ?",
-        (vendor_key(vendor), Outcome.REJECTED.value, cutoff),
-    ).fetchone()
-    return row["total"] or 0.0
+        "WHERE vendor_key = ? AND status != ? AND created_at >= ?"
+    )
+    params: list = [vendor_key(vendor), Outcome.REJECTED.value, cutoff]
+    if exclude_number:
+        sql += " AND (number_key IS NULL OR number_key != ?)"
+        params.append(exclude_number)
+    return conn.execute(sql, params).fetchone()["total"] or 0.0
 
 
 def escalated(conn: sqlite3.Connection) -> list[sqlite3.Row]:
