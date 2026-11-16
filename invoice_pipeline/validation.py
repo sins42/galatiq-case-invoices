@@ -268,7 +268,8 @@ def check_vendor(invoice: InvoiceData, conn: sqlite3.Connection) -> list[Finding
     if not invoice.vendor:
         return []  # completeness handles a missing vendor
     approved = {vendor_key(r["name"]) for r in conn.execute("SELECT name FROM vendors WHERE approved = 1").fetchall()}
-    if vendor_key(invoice.vendor) not in approved:
+    # Match on the primary name, stripping a trailing note such as "(formerly FastShip Ltd.)".
+    if vendor_key(invoice.vendor) not in approved and vendor_key(strip_qualifier(invoice.vendor)) not in approved:
         return [_finding(
             "UNKNOWN_VENDOR", Severity.REVIEW, f"'{invoice.vendor}' is not an approved vendor.",
         )]

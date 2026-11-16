@@ -69,6 +69,13 @@ def test_unknown_vendor_is_flagged(conn):
     assert check_vendor(_invoice(vendor="Widgets Inc."), conn) == []
 
 
+def test_vendor_matches_on_primary_name_despite_a_rename_note(conn):
+    # An approved vendor billing under a "(formerly ...)" note still matches.
+    assert check_vendor(_invoice(vendor="QuickShip Distributers (formerly FastShip Ltd.)"), conn) == []
+    # But an unapproved primary name does not, even if it claims to now be an approved one.
+    assert [f.code for f in check_vendor(_invoice(vendor="FastShip Ltd. (now QuickShip Distributers)"), conn)] == ["UNKNOWN_VENDOR"]
+
+
 def test_relative_due_date_escalates(settings):
     codes = {f.code for f in check_dates(_invoice(invoice_date="2026-01-20", due_date="yesterday"), settings)}
     assert "RELATIVE_DUE_DATE" in codes
