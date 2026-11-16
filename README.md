@@ -69,12 +69,18 @@ cannot force an approval.
 python main.py --invoice_path=<file>   # process one invoice
 python main.py --batch=<dir>           # process a directory and print run metrics
 python main.py --review                # list invoices waiting for human review
+python main.py --approve=<number>      # approve and pay an escalated invoice (use --reason)
+python main.py --reject=<number>       # reject an escalated invoice (use --reason)
+python main.py --route=<number>        # route an escalated invoice to the Controller (use --reason)
+python main.py --serve                  # serve the live review workbench at http://127.0.0.1:8765
 python main.py --reset                 # clear the ledger and reseed the database
 ```
 
-Add `--offline` to force the mock provider even when a key is set, `--db <path>` to use a
-different database, and `--log-level DEBUG` for more detail. Results print to stdout; structured
-JSON logs go to stderr; a per-invoice audit record is written to `runs/`.
+Add `--as-of YYYY-MM-DD` to set the reference date for due-date grouping and date checks (default: today),
+`--report <path>` to write the self-contained HTML review workbench for the run, `--offline` to force the
+mock provider even when a key is set, `--db <path>` to use a different database, and
+`--log-level DEBUG` for more detail. Results print to stdout; structured JSON logs go to stderr; a
+per-invoice audit record is written to `runs/`.
 
 ## Configuration
 
@@ -108,6 +114,8 @@ invoice_pipeline/
   ledger.py, db.py          SQLite ledger and inventory database
   normalize.py              matching, hashing, and date helpers
   metrics.py                batch run metrics and cost
+  workbench.py              self-contained HTML review workbench (the run report)
+  serve.py                  localhost server for the live, writable workbench
   llm/                      provider interface, Grok, mock, text parser
   models.py, config.py, state.py, prompts.py, audit.py, logs.py
 tests/                      pytest suite

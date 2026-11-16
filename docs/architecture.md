@@ -185,7 +185,11 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 - `python main.py --invoice_path=<file>` processes one invoice and prints the outcome and reasons.
 - `python main.py --batch=<dir>` processes every supported invoice in a directory and prints run metrics.
 - `python main.py --review` lists escalated invoices with their reasons.
+- `python main.py --approve=<number>`, `--reject=<number>`, or `--route=<number>`, with `--reason`, resolves or routes an escalated invoice.
 - `python main.py --reset` clears the ledger and reseeds the database.
+- `--report=<path>` writes the self-contained HTML review workbench: a run summary, the escalation queue grouped by due date, and evidence-first invoice detail with the extracted lines and source document. Decisions in this static file are simulated in the browser.
+- `python main.py --serve [--port 8765]` serves the same workbench live from the ledger over `http.server` on localhost. Its Approve, Reject and Route actions POST to `/api/decision`, which calls the same `apply_decision` path as the CLI, so the live page writes real ledger decisions.
+- `--as-of=YYYY-MM-DD` sets the reference date used to group the workbench queue by due date and to run the date checks; it defaults to today.
 - `--offline` forces the offline provider even when an API key is set.
 
 ## Operations
