@@ -254,9 +254,9 @@ A live Grok run of all 14 cases, three times each, gives:
 | Run-to-run agreement | 93% |
 
 The full per-case table and method are in [docs/eval-results.md](docs/eval-results.md). The harness
-runs the cases in parallel, each on its own throwaway database, so it never touches real data. The
-offline mock is deterministic; `python main.py --eval --provider grok --runs 3` reproduces the live
-numbers above.
+runs the cases in parallel (`--workers`, default 4), each on its own throwaway database, so it never
+touches real data. The offline mock is deterministic; `python main.py --eval --provider grok --runs 3`
+reproduces the live numbers above, and `--out docs/eval-results.md` regenerates that file.
 
 ## Limitations
 

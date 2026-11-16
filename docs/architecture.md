@@ -8,7 +8,7 @@ The guiding rule is: never pay a bad invoice, and always explain the decision. T
 
 ## Implementation status
 
-The current build runs the pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), using the Grok provider when an API key is set and a deterministic mock provider otherwise, with the full set of validation checks. Items marked (planned) below are designed but not yet implemented. The build order is listed under [Scope](decisions.md#scope) in the decisions document. The one planned item is recorded model responses.
+The current build runs the pipeline end to end on all five formats (TXT, JSON, CSV, XML, and PDF), using the Grok provider when an API key is set and a deterministic mock provider otherwise, with the full set of validation checks. The build order is listed under [Scope](decisions.md#scope) in the decisions document.
 
 ## Workflow
 
@@ -136,7 +136,7 @@ The approval agent only sees invoices that passed the hard checks, so it only ha
 
 - It receives structured fields and findings, not the raw document. Free text is passed as labeled, untrusted data.
 - It can approve or escalate. It cannot reject, because rejection is reserved for the deterministic checks.
-- It can call read-only tools to look up stock, catalog price, and the vendor's recent invoices.
+- It can call five read-only tools: an item's catalog entry, its stock, its catalog price, the vendor's recent invoices, and this invoice number's prior history. None of them can approve or pay.
 - A critic reviews every proposed approval against the rules and findings, and must cite a specific flag or fact to object. The actor gets up to two rounds to resolve objections. If they do not agree, or the actor reverses itself, the invoice escalates.
 - Above the CFO threshold (50,000 by default), the invoice always escalates for human sign-off.
 - The final decision is the more cautious of the agent and the policy, so the model can never make an outcome less cautious.
@@ -154,7 +154,7 @@ Nodes call one interface: a prompt and a target schema in, a validated object ou
 1. xAI Grok, when an API key is set. The API is OpenAI-compatible, so other providers are easy to add.
 2. A deterministic mock, used when there is no key or when the run is forced offline, so the system always runs. The mock can return malformed output on demand to test the extraction loop.
 
-A third backend, recorded real responses replayed offline for the sample invoices, is planned.
+A third backend records real Grok responses to disk (`--record`) and replays them by request key offline (`--replay`), with no key or network, so the real-model path is reproducible. A recording over the sample batch is committed, and the mock still covers everything else.
 
 ## State and audit log
 
@@ -192,6 +192,7 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 - `--as-of=YYYY-MM-DD` sets the reference date used to group the workbench queue by due date and to run the date checks; it defaults to today.
 - `--offline` forces the offline provider even when an API key is set.
 - `--record=<path>` captures a live Grok run to a JSON file, and `--replay=<path>` replays it with no key or network, for a reproducible demo of the real model path.
+- `python main.py --eval [--provider grok --runs N]` scores the approval path against labeled cases (see Evaluation below); `--out=<path>` writes the report.
 
 ## Operations
 
@@ -200,3 +201,7 @@ Other controls: SQL queries use bound parameters, XML parsing disables external 
 - Cost stays low because clean invoices and structured files never call the model. A cheaper model handles extraction, and a stronger one handles approval.
 - A batch run reports the straight-through, escalation, and rejection rates, dollars paid versus held, model token usage, and, when token prices are configured, the estimated cost.
 - All thresholds, tolerances, retry caps, and model names live in one config module.
+
+## Evaluation
+
+The decision path is scored, not just demonstrated. `python main.py --eval` runs a set of invoices whose safe outcome is known through the real pipeline and counts unsafe approvals: paying an invoice a person should have held. Cases split into those the policy floor decides in code and those the model decides, so the eval covers both the guardrails and the agent's judgment. Each case runs on its own throwaway database, so runs are independent and parallel, and a nonzero exit code signals any unsafe approval. The latest live Grok result is in [eval-results.md](eval-results.md).

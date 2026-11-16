@@ -44,7 +44,7 @@ Near-matching numbers are only flagged when the vendor and total also match, bec
 
 **12. A full audit log.** Each stage records its inputs, outputs, and any prompt and model response, so every decision can be reconstructed. The cost is size and sensitivity. Redaction and retention are left for later.
 
-**13. The critic shares the approver's model.** The critic reviews the approver's draft on the same model that produced it. A separate or stronger critic model would be more independent and less likely to agree with reasoning it would have written itself, but there is no evidence yet that the shared-model critic rubber-stamps. The provider already keys models by role, so adding a separate critic slot is a small change. It is deferred until the eval harness exists and can measure whether a distinct critic model catches more bad approvals.
+**13. The critic shares the approver's model.** The critic reviews the approver's draft on the same model that produced it. A separate or stronger critic model would be more independent and less likely to agree with reasoning it would have written itself, but there is no evidence yet that the shared-model critic rubber-stamps. The provider already keys models by role, so adding a separate critic slot is a small change. It is deferred until there is evidence it helps: the eval harness (`--eval`) now measures unsafe approvals, so a distinct critic model can be judged against that number before taking on the extra cost.
 
 ## Expected outcomes for the sample invoices
 
