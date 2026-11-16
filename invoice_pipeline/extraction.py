@@ -7,6 +7,7 @@ go to the model. Model output is checked against the schema and grounded in the 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,6 +60,26 @@ def from_structured(data: Any) -> InvoiceData | None:
 
 def source_text(content: Any) -> str:
     return content if isinstance(content, str) else json.dumps(content, indent=2)
+
+
+# A field label at the start of a line that names an invoice total. Labels are often abbreviated,
+# so "Amt" and "Amount Due" count as well as "Total".
+_TOTAL_LABEL = re.compile(
+    r"^\s*(?:grand\s+total|invoice\s+total|total\s+amount|total\s+due|amount\s+due|balance\s+due|total|balance|amount|amt|sum)\b",
+    re.IGNORECASE,
+)
+# A currency-looking amount: a $ figure, a two-decimal number, or a thousands-separated number.
+# This is deliberately stricter than any digit so a bare count like "qty 20" is not read as money.
+_MONEY = re.compile(r"\$\s*\d[\d,]*(?:\.\d+)?|\d[\d,]*\.\d{2}|\d{1,3}(?:,\d{3})+")
+
+
+def stated_total(text: str) -> str | None:
+    """The source line stating a total, if one is present. Used to prompt a retry when the model
+    returns a null total although the invoice clearly states one under an abbreviated label."""
+    for line in text.splitlines():
+        if _TOTAL_LABEL.match(line) and _MONEY.search(line):
+            return line.strip()
+    return None
 
 
 def apply_home_currency(invoice: InvoiceData, home_currency: str) -> InvoiceData:
@@ -130,6 +151,15 @@ def model_attempt(provider: Provider, text: str, previous_output: str | None, er
     problems = ungrounded_values(invoice, text)
     if problems:
         return Attempt(None, raw, "Values not found in the invoice: " + "; ".join(problems), prompt)
+    if invoice.total is None:
+        stated = stated_total(text)
+        if stated is not None:
+            error = (
+                f"The invoice states a total on this line but you left total null: {stated!r}. "
+                "The total may be labeled with an abbreviation such as 'Amt' or 'Amount Due'. "
+                "Extract that amount into the total field."
+            )
+            return Attempt(None, raw, error, prompt)
     if invoice.currency is None:
         invoice.currency = infer_currency(text)
     if invoice.tax_rate is not None:

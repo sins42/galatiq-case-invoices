@@ -41,6 +41,16 @@ class Metrics:
     def rejection_rate(self) -> float:
         return self._rate(self.rejected)
 
+    @property
+    def seconds_per_invoice(self) -> float:
+        """Average model time per invoice. The model dominates end-to-end time; deterministic
+        checks run in well under a millisecond, so this is the processing time that matters."""
+        return (self.latency_ms / self.total / 1000) if self.total else 0.0
+
+    @property
+    def cost_per_invoice(self) -> float | None:
+        return (self.cost / self.total) if self.cost is not None and self.total else None
+
 
 def estimated_cost(usage: Iterable[Usage], settings: Settings) -> float | None:
     """Dollar estimate from token counts. Returns None unless both prices are configured,
@@ -97,7 +107,10 @@ def format_metrics(m: Metrics) -> str:
         f"  Model calls     {m.model_calls}",
         f"  Tokens          {m.input_tokens:,} in / {m.output_tokens:,} out",
         f"  Model latency   {m.latency_ms:,.0f} ms",
+        f"  Time/invoice    {m.seconds_per_invoice:,.2f} s",
     ]
     if m.cost is not None:
         lines.append(f"  Est. cost       ${m.cost:,.4f}")
+        if m.cost_per_invoice is not None:
+            lines.append(f"  Cost/invoice    ${m.cost_per_invoice:,.4f}")
     return "\n".join(lines)
