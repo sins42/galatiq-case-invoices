@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("--reject", metavar="NUMBER", help="reject an escalated invoice")
     action.add_argument("--route", metavar="NUMBER", help="route an escalated invoice to the Controller")
     action.add_argument("--serve", action="store_true", help="serve the live review workbench on localhost")
+    action.add_argument("--eval", action="store_true", help="score the approval agent against labeled ideal decisions")
     action.add_argument("--reset", action="store_true", help="clear the ledger and reseed the database")
     parser.add_argument("--reason", default="", help="reason recorded with --approve, --reject, or --route")
     parser.add_argument("--port", type=int, default=8765, help="port for --serve (default 8765)")
@@ -37,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--record", metavar="PATH", help="record the live Grok responses to PATH for later replay")
     parser.add_argument("--replay", metavar="PATH", help="replay recorded model responses from PATH (no API key needed)")
     parser.add_argument("--db", metavar="PATH", help="SQLite database path (default: inventory.db)")
+    parser.add_argument("--provider", choices=["mock", "grok"], default="mock", help="provider for --eval (default: mock)")
+    parser.add_argument("--runs", type=int, default=1, help="runs per case for --eval (default 1; use more for live variance)")
+    parser.add_argument("--workers", type=int, default=4, help="parallel workers for --eval (default 4)")
     parser.add_argument("--log-level", default="INFO", help="log level for the structured logs on stderr")
     return parser
 
@@ -155,6 +159,33 @@ def print_review_queue(conn) -> None:
         print()
 
 
+def run_eval(settings, provider_name: str, runs: int, workers: int = 4) -> int:
+    """Score the approval agent against labeled ideal decisions and write docs/eval-results.md."""
+    from . import evals
+    from .llm import MockProvider
+
+    if provider_name == "grok":
+        if not settings.xai_api_key:
+            print("error: --provider grok needs XAI_API_KEY", file=sys.stderr)
+            return 2
+        from .llm.grok import GrokProvider
+
+        factory = lambda: GrokProvider(settings)  # noqa: E731 a one-line factory reads clearly here
+    else:
+        factory = MockProvider
+
+    report = evals.evaluate(factory, settings, runs=runs, provider_name=provider_name, workers=workers)
+    markdown = evals.format_markdown(report)
+    out = Path("docs/eval-results.md")
+    if out.parent.is_dir():
+        out.write_text(markdown)
+        print(markdown)
+        print(f"Written    {out}")
+    else:
+        print(markdown)
+    return 0 if report.unsafe == 0 else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logs.configure(args.log_level)
@@ -190,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
         from . import serve  # imported lazily so the CLI does not pull in the server unless asked
         serve.run(settings, args.port)
         return 0
+    if args.eval:
+        return run_eval(settings, args.provider, args.runs, args.workers)
 
     try:
         provider = make_provider(settings, offline=args.offline, record_path=args.record, replay_path=args.replay)
